@@ -61,7 +61,7 @@ const Home: React.FC = () => {
             <Card
               hoverable
               className="h-full rounded-2xl border-none shadow-sm hover:shadow-xl transition-all duration-300 bg-indigo-600 group"
-              onClick={() => navigate("/test")} // Link to your interview test page
+              onClick={() => navigate("/interview")}
             >
               <div className="flex flex-col h-full">
                 <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">

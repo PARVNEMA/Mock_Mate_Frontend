@@ -41,7 +41,6 @@ const TTS_STT_Test: React.FC = () => {
     "Tell me about your experience with React development.",
   );
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
   // STT State
   const [isListening, setIsListening] = useState<boolean>(false);
@@ -88,17 +87,18 @@ const TTS_STT_Test: React.FC = () => {
   const speakWithEdgeTTS = async (inputText: string) => {
     try {
       setIsSpeaking(true);
-      // FIX: Use the static method getAudioBase64
-      const base64Audio = await EdgeTTS.getAudioBase64(
-        inputText,
-        "en-IN-NeerjaNeural",
-      );
-
-      const url = `data:audio/mpeg;base64,${base64Audio}`;
-      setAudioUrl(url);
-
+      const tts = new EdgeTTS(inputText, "en-IN-NeerjaNeural");
+      const result = await tts.synthesize();
+      const url = URL.createObjectURL(result.audio);
       const audio = new Audio(url);
-      audio.onended = () => setIsSpeaking(false);
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        setIsSpeaking(false);
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        setIsSpeaking(false);
+      };
       await audio.play();
     } catch (error) {
       console.error("Edge TTS Error:", error);
