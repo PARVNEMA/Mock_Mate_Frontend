@@ -14,6 +14,7 @@ import {
 	type VisemeCue,
 	type VisemeName,
 } from "../utils/lipsync";
+import { Leva } from "leva";
 
 interface Pause {
 	duration: number;
@@ -679,8 +680,8 @@ const TTS_STT_Test: React.FC = () => {
 					<div className="w-full h-[420px] rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
 						<Canvas
 							camera={{
-								position: [0, 1.55, 1.45],
-								fov: 30,
+								position: [0, 0.35, 1.4],
+								fov: 28,
 							}}
 						>
 							<ambientLight intensity={0.8} />
