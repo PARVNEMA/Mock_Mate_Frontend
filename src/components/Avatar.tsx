@@ -1,6 +1,9 @@
 import { useRef } from "react";
 import { useGLTF } from "@react-three/drei";
-import { useFrame, type ThreeElements } from "@react-three/fiber";
+import {
+	useFrame,
+	type ThreeElements,
+} from "@react-three/fiber";
 import { MathUtils, type SkinnedMesh } from "three";
 
 type MorphMesh = SkinnedMesh & {
@@ -33,21 +36,36 @@ const applyVisemeToMesh = (
 	smoothing: number,
 	speakingFallback: number,
 ) => {
-	if (!mesh?.morphTargetDictionary || !mesh.morphTargetInfluences) return;
+	const clamp = (v: number, min = 0, max = 0.55) =>
+		Math.min(max, Math.max(min, v));
+	if (
+		!mesh?.morphTargetDictionary ||
+		!mesh.morphTargetInfluences
+	)
+		return;
 
-	const { morphTargetDictionary: dict, morphTargetInfluences: influences } =
-		mesh;
+	const {
+		morphTargetDictionary: dict,
+		morphTargetInfluences: influences,
+	} = mesh;
 
 	const setMorph = (key: string, target: number) => {
 		const index = dict[key];
 		if (index === undefined) return;
-		influences[index] = MathUtils.lerp(influences[index] ?? 0, target, smoothing);
+
+		const safeTarget = clamp(target * visemeStrength);
+		influences[index] = MathUtils.lerp(
+			influences[index] ?? 0,
+			safeTarget,
+			smoothing,
+		);
 	};
 
 	for (const viseme of VISEME_KEYS) {
 		const index = dict[viseme];
 		if (index === undefined) continue;
-		const target = viseme === activeViseme ? visemeStrength : 0;
+		const target =
+			viseme === activeViseme ? visemeStrength : 0;
 		influences[index] = MathUtils.lerp(
 			influences[index] ?? 0,
 			target,
@@ -58,33 +76,45 @@ const applyVisemeToMesh = (
 	// Ensure visible mouth motion even when viseme cues are sparse.
 	const baseJaw =
 		activeViseme === "viseme_sil"
-			? speakingFallback * 0.35
-			: Math.max(0.35, speakingFallback * 0.6);
+			? speakingFallback * 0.2
+			: speakingFallback * 0.3;
 	const visemeJawBoost: Record<string, number> = {
-		viseme_PP: 0.2,
-		viseme_FF: 0.3,
-		viseme_TH: 0.35,
-		viseme_DD: 0.35,
-		viseme_kk: 0.45,
-		viseme_CH: 0.45,
-		viseme_SS: 0.3,
-		viseme_nn: 0.35,
-		viseme_RR: 0.32,
-		viseme_aa: 0.75,
-		viseme_E: 0.5,
-		viseme_I: 0.45,
-		viseme_O: 0.55,
-		viseme_U: 0.48,
+		viseme_PP: 0.1,
+		viseme_FF: 0.15,
+		viseme_TH: 0.18,
+		viseme_DD: 0.2,
+		viseme_kk: 0.25,
+		viseme_CH: 0.25,
+		viseme_SS: 0.15,
+		viseme_nn: 0.2,
+		viseme_RR: 0.18,
+		viseme_aa: 0.45, // was 0.75 ❌
+		viseme_E: 0.35,
+		viseme_I: 0.3,
+		viseme_O: 0.38,
+		viseme_U: 0.35,
 		viseme_sil: 0,
 	};
-	const jawTarget = Math.max(baseJaw, visemeJawBoost[activeViseme] ?? 0);
+	const jawTarget = Math.max(
+		baseJaw,
+		visemeJawBoost[activeViseme] ?? 0,
+	);
 	setMorph("jawOpen", jawTarget);
-	setMorph("mouthClose", activeViseme === "viseme_PP" ? 0.5 : 0);
+	setMorph(
+		"mouthClose",
+		activeViseme === "viseme_PP" ? 0.5 : 0,
+	);
 	setMorph(
 		"mouthFunnel",
-		activeViseme === "viseme_O" || activeViseme === "viseme_U" ? 0.45 : 0,
+		activeViseme === "viseme_O" ||
+			activeViseme === "viseme_U"
+			? 0.45
+			: 0,
 	);
-	setMorph("mouthPucker", activeViseme === "viseme_U" ? 0.35 : 0);
+	setMorph(
+		"mouthPucker",
+		activeViseme === "viseme_U" ? 0.35 : 0,
+	);
 };
 
 type AvatarProps = ThreeElements["group"] & {
@@ -101,14 +131,17 @@ export function Avatar({
 	isSpeaking = false,
 	...props
 }: AvatarProps) {
-	const { nodes, materials } = useGLTF("/models/main-avatar.glb") as any;
+	const { nodes, materials } = useGLTF(
+		"/models/main-avatar.glb",
+	) as any;
 	const headRef = useRef<MorphMesh>(null);
 	const teethRef = useRef<MorphMesh>(null);
 	const beardRef = useRef<MorphMesh>(null);
 
 	useFrame((state) => {
 		const speakingFallback = isSpeaking
-			? (Math.sin(state.clock.elapsedTime * 18) + 1) / 2
+			? ((Math.sin(state.clock.elapsedTime * 12) + 1) / 2) *
+				0.15
 			: 0;
 		applyVisemeToMesh(
 			headRef.current,

@@ -693,8 +693,8 @@ const TTS_STT_Test: React.FC = () => {
 								<Avatar
 									position={[0, -1.45, 0]}
 									activeViseme={activeViseme}
-									visemeStrength={1.35}
-									smoothing={0.55}
+									visemeStrength={0.6}
+									smoothing={0.65}
 									isSpeaking={isSpeaking}
 								/>
 								<Environment preset="city" />
