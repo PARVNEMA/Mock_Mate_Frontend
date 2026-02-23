@@ -11,6 +11,8 @@ import { Empty } from "antd";
 import TTS_STT_Test from "./components/TTS_STT_Test.tsx";
 import { AuthProvider } from "./context/AuthContext.tsx";
 import App from "./App.tsx";
+import Interview from "./pages/Interview.tsx";
+import InterviewSelector from "./components/InterviewSelector.tsx";
 
 const router = createBrowserRouter([
   {
@@ -48,6 +50,14 @@ const router = createBrowserRouter([
       {
         path: "/quiz",
         element: <Quiz />,
+      },
+      {
+        path: "/interviewselector",
+        element: <InterviewSelector />,
+      },
+      {
+        path: "/interview/:session_id",
+        element: <Interview />,
       },
     ],
   },

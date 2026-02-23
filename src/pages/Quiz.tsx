@@ -53,6 +53,8 @@ function Quiz() {
   const role = state?.role ?? "";
   const quizType = state?.type ?? "quick";
 
+  console.log("[Quiz] Component initialized with state:", { skills, role, quizType });
+
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [selectedAnswers, setSelectedAnswers] = useState<
     Record<string, number>
@@ -67,6 +69,7 @@ function Quiz() {
 
   const getQuestions = async () => {
     setLoading(true);
+    console.log("[Quiz] Fetching questions from backend...");
     try {
       const payload = {
         type: quizType,
@@ -75,14 +78,16 @@ function Quiz() {
         num_questions: 10,
       };
 
+      console.log("[Quiz] POST /quizzes/start – payload:", payload);
       const { data } = await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}/quizzes/start`,
         payload,
         getAuthHeaders(),
       );
+      console.log("[Quiz] ✅ Questions fetched successfully. Count:", data.questions?.length, "Data:", data);
       setQuestions(data.questions);
-      console.log("Questions fetched successfully");
-    } catch (error) {
+    } catch (error: any) {
+      console.error("[Quiz] ❌ Failed to fetch questions:", error.response?.data || error.message);
       message.error("Error loading quiz questions.");
     } finally {
       setLoading(false);
@@ -94,13 +99,18 @@ function Quiz() {
   }, []);
 
   const handleSelect = (questionId: string, optionIndex: number) => {
+    console.log(`[Quiz] Answer selected – question: ${questionId}, option index: ${optionIndex}`);
     setSelectedAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
   };
 
   const handleSubmit = async () => {
     // 1. Validation: Ensure all questions are answered to prevent backend math errors
-    if (Object.keys(selectedAnswers).length < questions.length) {
+    const answeredCount = Object.keys(selectedAnswers).length;
+    console.log(`[Quiz] Submit triggered – answered: ${answeredCount}/${questions.length}`);
+
+    if (answeredCount < questions.length) {
       message.warning("Please answer all questions before submitting.");
+      console.warn("[Quiz] Submission blocked: not all questions answered.");
       return;
     }
 
@@ -118,16 +128,18 @@ function Quiz() {
         })),
       };
 
+      console.log("[Quiz] POST /quizzes/submit – payload:", payload);
       const { data } = await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}/quizzes/submit`,
         payload,
         getAuthHeaders(),
       );
 
+      console.log("[Quiz] ✅ Quiz submitted successfully. Result:", data);
       setQuizResult(data);
       message.success("Quiz submitted successfully!");
     } catch (error: any) {
-      console.error("Submission Error Details:", error.response?.data);
+      console.error("[Quiz] ❌ Submission failed:", error.response?.data || error.message);
       const backendError = error.response?.data?.detail;
       message.error(
         typeof backendError === "string"

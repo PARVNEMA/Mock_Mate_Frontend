@@ -13,8 +13,8 @@ interface NavLink {
 const links: NavLink[] = [
   { name: "Home", href: "/" },
   { name: "Quiz", href: "/quizselector" },
+  { name: "Interview", href: "/interviewselector" },
   { name: "About", href: "/about" },
-  { name: "Contact", href: "/contact" },
 ];
 
 const Header = () => {
@@ -23,6 +23,7 @@ const Header = () => {
   const { userEmail, logout } = useAuth();
 
   const handleLogout = async () => {
+    console.log("[Header] Initiating logout...");
     try {
       const { data } = await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}/auth/logout`,
@@ -34,10 +35,12 @@ const Header = () => {
           },
         },
       );
-      console.log(data.message);
+      console.log("[Header] ✅ Logout successful:", data.message);
       logout();
       navigate("/");
-    } catch (error) {}
+    } catch (error: any) {
+      console.error("[Header] ❌ Logout failed:", error.response?.data || error.message);
+    }
   };
 
   const profileMenu = {
