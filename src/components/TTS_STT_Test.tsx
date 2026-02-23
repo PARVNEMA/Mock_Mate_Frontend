@@ -4,6 +4,8 @@ import {
 	Environment,
 	OrbitControls,
 } from "@react-three/drei";
+import { EdgeTTS } from "edge-tts-universal/browser";
+import { Lipsync } from "wawa-lipsync";
 import { Avatar } from "./Avatar";
 import {
 	createVisemeTrackFromTranscript,
@@ -48,6 +50,7 @@ const FILLER_WORDS = [
 const LIP_SYNC_TEST_TEXT =
 	"Peter bought five thin socks and chewy noodles around noon.";
 const HUNDRED_NS_TO_SECONDS = 1e7;
+const EDGE_TTS_VOICE = "en-US-EmmaMultilingualNeural";
 
 const TTS_STT_Test: React.FC = () => {
 	const [text, setText] = useState<string>(
@@ -63,6 +66,9 @@ const TTS_STT_Test: React.FC = () => {
 	>([]);
 	const [activeViseme, setActiveViseme] =
 		useState<VisemeName>("viseme_sil");
+	const [audioSourceLabel, setAudioSourceLabel] = useState<
+		string | null
+	>(null);
 
 	const [isListening, setIsListening] =
 		useState<boolean>(false);
@@ -81,6 +87,13 @@ const TTS_STT_Test: React.FC = () => {
 	const responseStartTimeRef = useRef<number | null>(null);
 	const speechStartTimeRef = useRef<number | null>(null);
 	const isBrowserSpeechRef = useRef(false);
+	const audioElementRef = useRef<HTMLAudioElement | null>(
+		null,
+	);
+	const audioObjectUrlRef = useRef<string | null>(null);
+	const wawaLipsyncRef = useRef<Lipsync | null>(null);
+	const wawaLipSyncRafRef = useRef<number | null>(null);
+	const isWawaDrivenRef = useRef(false);
 
 	const lipSyncTrackRef = useRef<VisemeCue[]>([]);
 	const lipSyncRafRef = useRef<number | null>(null);
@@ -97,8 +110,23 @@ const TTS_STT_Test: React.FC = () => {
 		}
 	};
 
+	const stopWawaLipSyncLoop = () => {
+		if (wawaLipSyncRafRef.current !== null) {
+			cancelAnimationFrame(wawaLipSyncRafRef.current);
+			wawaLipSyncRafRef.current = null;
+		}
+	};
+
+	const revokeAudioObjectUrl = () => {
+		if (!audioObjectUrlRef.current) return;
+		URL.revokeObjectURL(audioObjectUrlRef.current);
+		audioObjectUrlRef.current = null;
+	};
+
 	const resetLipSyncState = () => {
 		stopLipSyncLoop();
+		stopWawaLipSyncLoop();
+		isWawaDrivenRef.current = false;
 		cueIndexRef.current = 0;
 		lastVisemeRef.current = "viseme_sil";
 		setActiveViseme("viseme_sil");
@@ -189,11 +217,36 @@ const TTS_STT_Test: React.FC = () => {
 		window.speechSynthesis?.cancel();
 		isBrowserSpeechRef.current = false;
 		speechStartTimeRef.current = null;
+		isWawaDrivenRef.current = false;
+		stopWawaLipSyncLoop();
+		const audio = audioElementRef.current;
+		if (audio) {
+			audio.pause();
+			audio.removeAttribute("src");
+			audio.load();
+		}
+		revokeAudioObjectUrl();
 		ttsBoundaryBufferRef.current = [];
 		setTtsBoundaries([]);
 		setAudioUrl(null);
+		setAudioSourceLabel(null);
 		resetLipSyncState();
 		setIsSpeaking(false);
+	};
+
+	const driveLipSyncFromWawa = () => {
+		if (!isWawaDrivenRef.current) return;
+		const manager = wawaLipsyncRef.current;
+		if (!manager) return;
+		manager.processAudio();
+		const nextViseme = manager.viseme as VisemeName;
+		if (nextViseme !== lastVisemeRef.current) {
+			lastVisemeRef.current = nextViseme;
+			setActiveViseme(nextViseme);
+		}
+		wawaLipSyncRafRef.current = requestAnimationFrame(
+			driveLipSyncFromWawa,
+		);
 	};
 
 	const driveLipSyncFromClock = () => {
@@ -230,6 +283,70 @@ const TTS_STT_Test: React.FC = () => {
 		lipSyncRafRef.current = requestAnimationFrame(
 			driveLipSyncFromClock,
 		);
+	};
+
+	const speakWithEdgeTTS = async (
+		inputText: string,
+	): Promise<boolean> => {
+		if (!inputText.trim()) return false;
+		stopCurrentAudio();
+
+		try {
+			const tts = new EdgeTTS(inputText, EDGE_TTS_VOICE, {
+				rate: "+0%",
+				volume: "+0%",
+				pitch: "+0Hz",
+			});
+			const result = await tts.synthesize();
+			const boundaries = normalizeBoundaries(
+				result.subtitle,
+			);
+			ttsBoundaryBufferRef.current = boundaries;
+			setTtsBoundaries(boundaries);
+			lipSyncTrackRef.current =
+				createVisemeTrackFromWordBoundaries(boundaries);
+
+			const audio = audioElementRef.current;
+			const manager = wawaLipsyncRef.current;
+			if (!audio || !manager) {
+				throw new Error(
+					"Audio or lipsync manager unavailable",
+				);
+			}
+
+			revokeAudioObjectUrl();
+			const objectUrl = URL.createObjectURL(result.audio);
+			audioObjectUrlRef.current = objectUrl;
+			audio.src = objectUrl;
+			audio.preload = "auto";
+			audio.currentTime = 0;
+
+			manager.connectAudio(audio);
+			setAudioUrl(objectUrl);
+			setAudioSourceLabel("edge-tts");
+			setIsSpeaking(true);
+
+			isWawaDrivenRef.current = true;
+			stopWawaLipSyncLoop();
+			wawaLipSyncRafRef.current = requestAnimationFrame(
+				driveLipSyncFromWawa,
+			);
+			await audio.play();
+			return true;
+		} catch (error) {
+			console.error(
+				"Edge TTS / wawa-lipsync failed:",
+				error,
+			);
+			stopCurrentAudio();
+			return false;
+		}
+	};
+
+	const speakText = async (inputText: string) => {
+		const usedEdge = await speakWithEdgeTTS(inputText);
+		if (usedEdge) return;
+		await speakWithBrowserTTS(inputText);
 	};
 
 	const speakWithBrowserTTS = async (inputText: string) => {
@@ -275,6 +392,7 @@ const TTS_STT_Test: React.FC = () => {
 		ttsBoundaryBufferRef.current = [];
 		setTtsBoundaries([]);
 		setAudioUrl(null);
+		setAudioSourceLabel(null);
 		setIsSpeaking(true);
 
 		let hasStarted = false;
@@ -294,6 +412,7 @@ const TTS_STT_Test: React.FC = () => {
 			isBrowserSpeechRef.current = true;
 			speechStartTimeRef.current = performance.now();
 			setAudioUrl("speech-synthesis://active");
+			setAudioSourceLabel("browser-speech");
 			lipSyncRafRef.current = requestAnimationFrame(
 				driveLipSyncFromClock,
 			);
@@ -344,6 +463,7 @@ const TTS_STT_Test: React.FC = () => {
 				setTtsBoundaries(normalized);
 			}
 			setAudioUrl(null);
+			setAudioSourceLabel(null);
 			resetLipSyncState();
 			setIsSpeaking(false);
 		};
@@ -354,6 +474,7 @@ const TTS_STT_Test: React.FC = () => {
 			isBrowserSpeechRef.current = false;
 			speechStartTimeRef.current = null;
 			setAudioUrl(null);
+			setAudioSourceLabel(null);
 			resetLipSyncState();
 			setIsSpeaking(false);
 		};
@@ -363,12 +484,49 @@ const TTS_STT_Test: React.FC = () => {
 	};
 
 	useEffect(() => {
+		const audio = new Audio();
+		audio.preload = "auto";
+		audioElementRef.current = audio;
+		wawaLipsyncRef.current = new Lipsync();
+
+		audio.onended = () => {
+			isWawaDrivenRef.current = false;
+			stopWawaLipSyncLoop();
+			revokeAudioObjectUrl();
+			setAudioUrl(null);
+			setAudioSourceLabel(null);
+			resetLipSyncState();
+			setIsSpeaking(false);
+		};
+
+		audio.onerror = () => {
+			isWawaDrivenRef.current = false;
+			stopWawaLipSyncLoop();
+			revokeAudioObjectUrl();
+			setAudioUrl(null);
+			setAudioSourceLabel(null);
+			resetLipSyncState();
+			setIsSpeaking(false);
+		};
+
 		return () => {
 			stopLipSyncLoop();
+			stopWawaLipSyncLoop();
+			isWawaDrivenRef.current = false;
 			if (window.speechSynthesis)
 				window.speechSynthesis.cancel();
 			if (recognitionRef.current)
 				recognitionRef.current.stop();
+			const currentAudio = audioElementRef.current;
+			if (currentAudio) {
+				currentAudio.pause();
+				currentAudio.removeAttribute("src");
+				currentAudio.load();
+				currentAudio.onended = null;
+				currentAudio.onerror = null;
+			}
+			audioElementRef.current = null;
+			revokeAudioObjectUrl();
 		};
 	}, []);
 
@@ -555,7 +713,10 @@ const TTS_STT_Test: React.FC = () => {
 					</div>
 					{audioUrl && (
 						<div className="mt-3 text-sm text-slate-500 break-all">
-							Audio source: browser speech synthesis
+							Audio source:{" "}
+							{audioSourceLabel === "edge-tts"
+								? "Edge TTS + wawa-lipsync"
+								: "browser speech synthesis (fallback)"}
 						</div>
 					)}
 				</section>
@@ -573,9 +734,7 @@ const TTS_STT_Test: React.FC = () => {
 						/>
 						<div className="flex gap-3 mt-4">
 							<button
-								onClick={() =>
-									void speakWithBrowserTTS(text)
-								}
+								onClick={() => void speakText(text)}
 								disabled={isSpeaking}
 								className="flex-1 bg-blue-600 text-white font-semibold py-3 rounded-xl hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
 							>
@@ -584,11 +743,7 @@ const TTS_STT_Test: React.FC = () => {
 									: "Play Voice"}
 							</button>
 							<button
-								onClick={() =>
-									void speakWithBrowserTTS(
-										LIP_SYNC_TEST_TEXT,
-									)
-								}
+								onClick={() => void speakText(text)}
 								disabled={isSpeaking}
 								className="bg-slate-700 text-white font-semibold px-4 py-3 rounded-xl hover:bg-slate-800 disabled:bg-gray-300 transition-colors"
 								title={LIP_SYNC_TEST_TEXT}
