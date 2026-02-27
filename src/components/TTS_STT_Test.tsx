@@ -4,7 +4,6 @@ import {
 	Environment,
 	OrbitControls,
 } from "@react-three/drei";
-import { EdgeTTS } from "edge-tts-universal/browser";
 import { Lipsync } from "wawa-lipsync";
 import { Avatar } from "./Avatar";
 import {
@@ -14,7 +13,7 @@ import {
 	type VisemeCue,
 	type VisemeName,
 } from "../utils/lipsync";
-import { Leva } from "leva";
+import { synthesizeSarvamSpeech } from "../services/sarvamTts";
 
 interface Pause {
 	duration: number;
@@ -51,7 +50,6 @@ const FILLER_WORDS = [
 const LIP_SYNC_TEST_TEXT =
 	"Peter bought five thin socks and chewy noodles around noon.";
 const HUNDRED_NS_TO_SECONDS = 1e7;
-const EDGE_TTS_VOICE = "en-US-EmmaMultilingualNeural";
 
 const TTS_STT_Test: React.FC = () => {
 	const [text, setText] = useState<string>(
@@ -286,26 +284,33 @@ const TTS_STT_Test: React.FC = () => {
 		);
 	};
 
-	const speakWithEdgeTTS = async (
+	const speakWithSarvamTTS = async (
 		inputText: string,
 	): Promise<boolean> => {
 		if (!inputText.trim()) return false;
 		stopCurrentAudio();
 
 		try {
-			const tts = new EdgeTTS(inputText, EDGE_TTS_VOICE, {
-				rate: "+0%",
-				volume: "+0%",
-				pitch: "+0Hz",
+			const audioBlob = await synthesizeSarvamSpeech({
+				text: inputText,
+				targetLanguageCode: "en-IN",
+				speaker: "anushka",
+				model: "bulbul:v2",
 			});
-			const result = await tts.synthesize();
-			const boundaries = normalizeBoundaries(
-				result.subtitle,
+
+			ttsBoundaryBufferRef.current = [];
+			setTtsBoundaries([]);
+			const estimatedDuration = Math.max(
+				inputText.split(/\s+/).filter(Boolean).length *
+					0.38,
+				1.0,
 			);
-			ttsBoundaryBufferRef.current = boundaries;
-			setTtsBoundaries(boundaries);
 			lipSyncTrackRef.current =
-				createVisemeTrackFromWordBoundaries(boundaries);
+				createVisemeTrackFromTranscript(
+					inputText,
+					estimatedDuration,
+				);
+			cueIndexRef.current = 0;
 
 			const audio = audioElementRef.current;
 			const manager = wawaLipsyncRef.current;
@@ -316,7 +321,7 @@ const TTS_STT_Test: React.FC = () => {
 			}
 
 			revokeAudioObjectUrl();
-			const objectUrl = URL.createObjectURL(result.audio);
+			const objectUrl = URL.createObjectURL(audioBlob);
 			audioObjectUrlRef.current = objectUrl;
 			audio.src = objectUrl;
 			audio.preload = "auto";
@@ -324,7 +329,7 @@ const TTS_STT_Test: React.FC = () => {
 
 			manager.connectAudio(audio);
 			setAudioUrl(objectUrl);
-			setAudioSourceLabel("edge-tts");
+			setAudioSourceLabel("sarvam-tts");
 			setIsSpeaking(true);
 
 			isWawaDrivenRef.current = true;
@@ -336,7 +341,7 @@ const TTS_STT_Test: React.FC = () => {
 			return true;
 		} catch (error) {
 			console.error(
-				"Edge TTS / wawa-lipsync failed:",
+				"Sarvam TTS / wawa-lipsync failed:",
 				error,
 			);
 			stopCurrentAudio();
@@ -345,8 +350,8 @@ const TTS_STT_Test: React.FC = () => {
 	};
 
 	const speakText = async (inputText: string) => {
-		const usedEdge = await speakWithEdgeTTS(inputText);
-		if (usedEdge) return;
+		const usedSarvam = await speakWithSarvamTTS(inputText);
+		if (usedSarvam) return;
 		await speakWithBrowserTTS(inputText);
 	};
 
@@ -715,8 +720,8 @@ const TTS_STT_Test: React.FC = () => {
 					{audioUrl && (
 						<div className="mt-3 text-sm text-slate-500 break-all">
 							Audio source:{" "}
-							{audioSourceLabel === "edge-tts"
-								? "Edge TTS + wawa-lipsync"
+							{audioSourceLabel === "sarvam-tts"
+								? "Sarvam TTS + wawa-lipsync"
 								: "browser speech synthesis (fallback)"}
 						</div>
 					)}
