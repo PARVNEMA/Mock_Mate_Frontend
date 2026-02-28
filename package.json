@@ -22,6 +22,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0",
+    "react-speech-recognition": "^4.0.1",
     "tailwindcss": "^4.1.18",
     "wawa-lipsync": "^0.0.2"
   },

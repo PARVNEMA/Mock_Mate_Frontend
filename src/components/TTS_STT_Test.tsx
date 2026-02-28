@@ -14,7 +14,9 @@ import {
 	type VisemeName,
 } from "../utils/lipsync";
 import { synthesizeSarvamSpeech } from "../services/sarvamTts";
-
+import SpeechRecognition, {
+	useSpeechRecognition,
+} from "react-speech-recognition";
 interface Pause {
 	duration: number;
 	timestamp: number;
@@ -25,13 +27,6 @@ interface Analytics {
 	pauses: Pause[];
 	responseTime: string | null;
 	wordCount: number;
-}
-
-declare global {
-	interface Window {
-		webkitSpeechRecognition: any;
-		SpeechRecognition: any;
-	}
 }
 
 const FILLER_WORDS = [
@@ -69,22 +64,20 @@ const TTS_STT_Test: React.FC = () => {
 		string | null
 	>(null);
 
-	const [isListening, setIsListening] =
-		useState<boolean>(false);
-	const [transcript, setTranscript] = useState<string>("");
-	const [interimTranscript, setInterimTranscript] =
-		useState<string>("");
 	const [analytics, setAnalytics] = useState<Analytics>({
 		fillerWords: {},
 		pauses: [],
 		responseTime: null,
 		wordCount: 0,
 	});
+	const [sttError, setSttError] = useState<string | null>(
+		null,
+	);
 
-	const recognitionRef = useRef<any>(null);
 	const lastSpeechTimeRef = useRef<number>(Date.now());
 	const responseStartTimeRef = useRef<number | null>(null);
 	const speechStartTimeRef = useRef<number | null>(null);
+	const processedFinalTranscriptRef = useRef<string>("");
 	const isBrowserSpeechRef = useRef(false);
 	const audioElementRef = useRef<HTMLAudioElement | null>(
 		null,
@@ -102,6 +95,16 @@ const TTS_STT_Test: React.FC = () => {
 		[],
 	);
 
+	const {
+		transcript,
+		finalTranscript,
+		interimTranscript,
+		listening,
+		isMicrophoneAvailable,
+		resetTranscript,
+		browserSupportsSpeechRecognition,
+		browserSupportsContinuousListening,
+	} = useSpeechRecognition();
 	const stopLipSyncLoop = () => {
 		if (lipSyncRafRef.current !== null) {
 			cancelAnimationFrame(lipSyncRafRef.current);
@@ -494,6 +497,32 @@ const TTS_STT_Test: React.FC = () => {
 		audio.preload = "auto";
 		audioElementRef.current = audio;
 		wawaLipsyncRef.current = new Lipsync();
+		const recognition = SpeechRecognition.getRecognition();
+
+		const handleRecognitionError = (event: Event) => {
+			const sttEvent = event as Event & {
+				error?: string;
+				message?: string;
+			};
+			const label =
+				sttEvent.error ??
+				sttEvent.message ??
+				"speech-recognition-error";
+			setSttError(label);
+		};
+		const handleRecognitionStart = () => {
+			setSttError(null);
+		};
+		if (recognition?.addEventListener) {
+			recognition.addEventListener(
+				"error",
+				handleRecognitionError as EventListener,
+			);
+			recognition.addEventListener(
+				"start",
+				handleRecognitionStart,
+			);
+		}
 
 		audio.onended = () => {
 			isWawaDrivenRef.current = false;
@@ -521,8 +550,17 @@ const TTS_STT_Test: React.FC = () => {
 			isWawaDrivenRef.current = false;
 			if (window.speechSynthesis)
 				window.speechSynthesis.cancel();
-			if (recognitionRef.current)
-				recognitionRef.current.stop();
+			void SpeechRecognition.stopListening();
+			if (recognition?.removeEventListener) {
+				recognition.removeEventListener(
+					"error",
+					handleRecognitionError as EventListener,
+				);
+				recognition.removeEventListener(
+					"start",
+					handleRecognitionStart,
+				);
+			}
 			const currentAudio = audioElementRef.current;
 			if (currentAudio) {
 				currentAudio.pause();
@@ -550,26 +588,79 @@ const TTS_STT_Test: React.FC = () => {
 		});
 	};
 
-	const startListening = () => {
-		const SpeechRecognition =
-			window.SpeechRecognition ||
-			window.webkitSpeechRecognition;
-		if (!SpeechRecognition) {
+	useEffect(() => {
+		if (!finalTranscript) {
+			processedFinalTranscriptRef.current = "";
+			return;
+		}
+		const previous = processedFinalTranscriptRef.current;
+		if (finalTranscript.length <= previous.length) {
+			processedFinalTranscriptRef.current = finalTranscript;
+			return;
+		}
+
+		const newSegment = finalTranscript
+			.slice(previous.length)
+			.trim();
+		processedFinalTranscriptRef.current = finalTranscript;
+		if (!newSegment) return;
+
+		analyzeFillerWords(newSegment);
+		const now = Date.now();
+		const gap = now - lastSpeechTimeRef.current;
+		if (gap > 1500) {
+			setAnalytics((prev) => ({
+				...prev,
+				pauses: [
+					...prev.pauses,
+					{ duration: gap, timestamp: now },
+				],
+			}));
+		}
+		lastSpeechTimeRef.current = now;
+	}, [finalTranscript]);
+
+	useEffect(() => {
+		const totalWords = transcript
+			.trim()
+			.split(/\s+/)
+			.filter((word: string) => word !== "").length;
+		setAnalytics((prev) => ({
+			...prev,
+			wordCount: totalWords,
+		}));
+	}, [transcript]);
+
+	useEffect(() => {
+		if (listening || responseStartTimeRef.current === null)
+			return;
+		const time = (
+			(Date.now() - responseStartTimeRef.current) /
+			1000
+		).toFixed(1);
+		setAnalytics((prev) => ({
+			...prev,
+			responseTime: time,
+		}));
+		responseStartTimeRef.current = null;
+	}, [listening]);
+
+	const startListening = async () => {
+		if (!browserSupportsSpeechRecognition) {
 			alert(
 				"Speech recognition not supported in this browser.",
 			);
 			return;
 		}
-
-		const recognition = new SpeechRecognition();
-		recognitionRef.current = recognition;
-
-		recognition.continuous = true;
-		recognition.interimResults = true;
-		recognition.lang = "en-IN";
-
-		setTranscript("");
-		setInterimTranscript("");
+		if (!navigator.onLine) {
+			alert(
+				"Speech recognition is offline. Please check internet connection.",
+			);
+			return;
+		}
+		resetTranscript();
+		processedFinalTranscriptRef.current = "";
+		setSttError(null);
 		setAnalytics({
 			fillerWords: {},
 			pauses: [],
@@ -578,88 +669,26 @@ const TTS_STT_Test: React.FC = () => {
 		});
 		responseStartTimeRef.current = Date.now();
 		lastSpeechTimeRef.current = Date.now();
+		const preferredLanguage =
+			(navigator.language || "").trim() || "en-US";
 
-		recognition.onstart = () => setIsListening(true);
-
-		recognition.onerror = (event: any) => {
-			console.error("SR Error:", event.error);
-			if (event.error === "not-allowed") {
-				alert(
-					"Microphone access blocked. Please enable it in browser settings.",
-				);
-			}
-			setIsListening(false);
-		};
-
-		recognition.onresult = (event: any) => {
-			let finalStr = "";
-			let interimStr = "";
-
-			for (
-				let i = event.resultIndex;
-				i < event.results.length;
-				i++
-			) {
-				const result = event.results[i];
-				if (result.isFinal) {
-					const segment = result[0].transcript;
-					finalStr += `${segment} `;
-					analyzeFillerWords(segment);
-
-					const now = Date.now();
-					const gap = now - lastSpeechTimeRef.current;
-					if (gap > 1500) {
-						setAnalytics((prev) => ({
-							...prev,
-							pauses: [
-								...prev.pauses,
-								{ duration: gap, timestamp: now },
-							],
-						}));
-					}
-					lastSpeechTimeRef.current = now;
-				} else {
-					interimStr += result[0].transcript;
-				}
-			}
-
-			setTranscript((prev) => prev + finalStr);
-			setInterimTranscript(interimStr);
-
-			const totalWords = (
-				transcript +
-				finalStr +
-				interimStr
-			)
-				.trim()
-				.split(/\s+/)
-				.filter((word) => word !== "").length;
-			setAnalytics((prev) => ({
-				...prev,
-				wordCount: totalWords,
-			}));
-		};
-
-		recognition.onend = () => {
-			setIsListening(false);
-			if (responseStartTimeRef.current) {
-				const time = (
-					(Date.now() - responseStartTimeRef.current) /
-					1000
-				).toFixed(1);
-				setAnalytics((prev) => ({
-					...prev,
-					responseTime: time,
-				}));
-			}
-		};
-
-		recognition.start();
+		try {
+			await SpeechRecognition.startListening({
+				continuous:
+					browserSupportsContinuousListening,
+				language: preferredLanguage,
+			});
+		} catch (error) {
+			console.error("SR Error:", error);
+			setSttError("microphone-start-failed");
+			alert(
+				"Microphone access failed. Please check browser permissions.",
+			);
+		}
 	};
-
-	const stopListening = () => {
-		if (recognitionRef.current)
-			recognitionRef.current.stop();
+	// console.log("transcript=", transcript);
+	const stopListening = async () => {
+		await SpeechRecognition.stopListening();
 	};
 
 	const totalFillers = Object.values(
@@ -765,31 +794,58 @@ const TTS_STT_Test: React.FC = () => {
 						</h2>
 						<button
 							onClick={
-								isListening ? stopListening : startListening
+								listening ? stopListening : startListening
 							}
+							disabled={!browserSupportsSpeechRecognition}
 							className={`w-full py-4 rounded-xl font-bold text-lg mb-4 transition-all ${
-								isListening
+								listening
 									? "bg-red-100 text-red-600 border-2 border-red-600 animate-pulse"
-									: "bg-purple-600 text-white hover:bg-purple-700"
+									: "bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-300 disabled:text-gray-600"
 							}`}
 						>
-							{isListening
+							{listening
 								? "Stop Recording"
 								: "Start Responding"}
 						</button>
 						<div className="p-4 bg-gray-900 text-gray-100 rounded-xl min-h-40 leading-relaxed shadow-inner">
 							<span className="opacity-100">
-								{transcript}
+								{finalTranscript}
 							</span>
 							<span className="opacity-50 text-blue-300">
 								{interimTranscript}
 							</span>
-							{!transcript && !interimTranscript && (
+							{!finalTranscript && !interimTranscript && (
 								<span className="text-gray-500 italic">
 									Waiting for speech...
 								</span>
 							)}
 						</div>
+						{!browserSupportsSpeechRecognition && (
+							<p className="mt-3 text-sm text-red-600">
+								This browser does not support speech
+								recognition.
+							</p>
+						)}
+						{browserSupportsSpeechRecognition &&
+							!isMicrophoneAvailable && (
+								<p className="mt-3 text-sm text-red-600">
+									Microphone permission denied.
+									Enable mic access for this site.
+								</p>
+							)}
+						{sttError && (
+							<p className="mt-2 text-xs text-amber-700">
+								STT error: {sttError}
+							</p>
+						)}
+						{browserSupportsSpeechRecognition &&
+							!browserSupportsContinuousListening && (
+								<p className="mt-2 text-xs text-slate-500">
+									Continuous listening is limited on
+									this browser. Recording may stop after
+									each phrase.
+								</p>
+							)}
 					</section>
 				</div>
 
