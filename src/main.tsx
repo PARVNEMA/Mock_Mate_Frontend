@@ -11,16 +11,15 @@ import { Empty } from "antd";
 import TTS_STT_Test from "./components/TTS_STT_Test.tsx";
 import { AuthProvider } from "./context/AuthContext.tsx";
 import App from "./App.tsx";
+import InterviewSetup from "./pages/InterviewSetup.tsx";
+import InterviewRoom from "./pages/InterviewRoom.tsx";
+import InterviewReport from "./pages/InterviewReport.tsx";
 
 const router = createBrowserRouter([
   {
     path: "/",
     element: <App />,
     children: [
-      {
-        path: "*",
-        element: <Empty />,
-      },
       {
         path: "/",
         element: <Home />,
@@ -42,12 +41,28 @@ const router = createBrowserRouter([
         element: <TTS_STT_Test />,
       },
       {
+        path: "/interview",
+        element: <InterviewSetup />,
+      },
+      {
+        path: "/interview/:sessionId",
+        element: <InterviewRoom />,
+      },
+      {
+        path: "/interview/:sessionId/report",
+        element: <InterviewReport />,
+      },
+      {
         path: "/quizselector",
         element: <QuizSelector />,
       },
       {
         path: "/quiz",
         element: <Quiz />,
+      },
+      {
+        path: "*",
+        element: <Empty />,
       },
     ],
   },
