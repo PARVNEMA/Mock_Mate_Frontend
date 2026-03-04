@@ -24,7 +24,6 @@ const SignIn: React.FC = () => {
         `${import.meta.env.VITE_BACKEND_URL}/auth/login`,
         values,
         {
-          withCredentials: true,
         },
       );
       console.log("Login successful:", data);
@@ -32,6 +31,7 @@ const SignIn: React.FC = () => {
         data.user.email,
         data.session.access_token,
         data.session.refresh_token,
+        data.user.id,
       );
       navigate("/");
     } catch (error: any) {

@@ -69,7 +69,7 @@ const SignUp: React.FC = () => {
     try {
       const response = await axios.get(
         `${import.meta.env.VITE_BACKEND_URL}/profiles/me`,
-        { withCredentials: true, ...getAuthHeaders() },
+        { ...getAuthHeaders() },
       );
       console.log("Profile fetched successfully:", response.data);
     } catch (error) {
@@ -91,7 +91,7 @@ const SignUp: React.FC = () => {
       const { data } = await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}/auth/signup`,
         payload,
-        { withCredentials: true },
+        {},
       );
 
       console.log("Signup successful:", data);
@@ -101,6 +101,7 @@ const SignUp: React.FC = () => {
         data.user.email,
         data.session.access_token,
         data.session.refresh_token,
+        data.user.id,
       );
       getProfile();
 

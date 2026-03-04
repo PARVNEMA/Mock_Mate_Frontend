@@ -14,6 +14,8 @@ import App from "./App.tsx";
 import InterviewSetup from "./pages/InterviewSetup.tsx";
 import InterviewRoom from "./pages/InterviewRoom.tsx";
 import InterviewReport from "./pages/InterviewReport.tsx";
+import GdLobby from "./pages/GdLobby.tsx";
+import GdRoom from "./pages/GdRoom.tsx";
 
 const router = createBrowserRouter([
   {
@@ -59,6 +61,14 @@ const router = createBrowserRouter([
       {
         path: "/quiz",
         element: <Quiz />,
+      },
+      {
+        path: "/gd",
+        element: <GdLobby />,
+      },
+      {
+        path: "/gd/room/:roomId",
+        element: <GdRoom />,
       },
       {
         path: "*",

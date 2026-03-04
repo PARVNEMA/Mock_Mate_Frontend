@@ -3,6 +3,7 @@ import { Card, Button, Typography, Row, Col } from "antd";
 import {
   ThunderboltOutlined,
   VideoCameraOutlined,
+  TeamOutlined,
   ArrowRightOutlined,
   HistoryOutlined,
   LineChartOutlined,
@@ -79,6 +80,33 @@ const Home: React.FC = () => {
                   className="p-0 text-white font-bold flex items-center gap-2"
                 >
                   Launch Session <ArrowRightOutlined />
+                </Button>
+              </div>
+            </Card>
+          </Col>
+
+          <Col xs={24} md={12}>
+            <Card
+              hoverable
+              className="h-full rounded-2xl border-none shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden group"
+              onClick={() => navigate("/gd")}
+            >
+              <div className="flex flex-col h-full">
+                <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                  <TeamOutlined className="text-2xl text-emerald-600" />
+                </div>
+                <Title level={3} className="mb-2!">
+                  Group Discussion
+                </Title>
+                <Text className="text-slate-500 mb-8 grow">
+                  Join a live discussion room, collaborate, and practice your
+                  communication skills.
+                </Text>
+                <Button
+                  type="text"
+                  className="p-0 text-emerald-600 font-bold flex items-center gap-2"
+                >
+                  Join Lobby <ArrowRightOutlined />
                 </Button>
               </div>
             </Card>

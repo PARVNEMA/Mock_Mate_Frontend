@@ -14,6 +14,7 @@ const links: NavLink[] = [
   { name: "Home", href: "/" },
   { name: "Quiz", href: "/quizselector" },
   { name: "Interview", href: "/interview" },
+  { name: "GD", href: "/gd" },
   { name: "About", href: "/about" },
   { name: "Contact", href: "/contact" },
 ];
@@ -29,7 +30,6 @@ const Header = () => {
         `${import.meta.env.VITE_BACKEND_URL}/auth/logout`,
         {},
         {
-          withCredentials: true,
           headers: {
             Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
