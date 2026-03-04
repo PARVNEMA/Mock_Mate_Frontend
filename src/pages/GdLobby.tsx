@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Typography, message } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -12,8 +12,10 @@ import LobbyStatusCard from "../components/gd/LobbyStatusCard";
 import QueueStats from "../components/gd/QueueStats";
 import ConnectionBadge from "../components/gd/ConnectionBadge";
 import { getMyStatus } from "../services/gdApi";
+import createLogger from "../utils/logger";
 
 const { Title, Text } = Typography;
+const logger = createLogger("GdLobby");
 
 export default function GdLobby() {
   const navigate = useNavigate();
@@ -30,13 +32,15 @@ export default function GdLobby() {
     [],
   );
 
-  const onMessage = (msg: GdLobbyWsMessage) => {
+  const onMessage = useCallback((msg: GdLobbyWsMessage) => {
+    logger.debug("Lobby message received", { type: msg.type });
     if (msg.type === "lobby_update" || msg.type === "queue_status") {
       setStatus(msg);
       if ("estimated_wait_seconds" in msg && msg.estimated_wait_seconds) {
         setEstimatedWait(msg.estimated_wait_seconds ?? null);
       }
     } else if (msg.type === "room_created") {
+      logger.info("Room created from lobby", { roomId: msg.room_id });
       message.success("Room created! Redirecting...");
       navigate(`/gd/room/${msg.room_id}`);
     } else if (msg.type === "blacklisted") {
@@ -45,7 +49,7 @@ export default function GdLobby() {
     } else if (msg.type === "error") {
       message.error(msg.message);
     }
-  };
+  }, [navigate]);
 
   const { isConnected, close } = useGdLobbySocket({
     httpBaseUrl: baseUrl,
@@ -65,6 +69,9 @@ export default function GdLobby() {
         const status = await getMyStatus(accessToken);
         if (stopped) return;
         if (status.in_room && status.room_id) {
+          logger.info("Found active room via status polling", {
+            roomId: status.room_id,
+          });
           navigate(`/gd/room/${status.room_id}`);
         }
       } catch {
@@ -88,9 +95,11 @@ export default function GdLobby() {
     }
     setBlacklistedMessage(null);
     setJoined(true);
+    logger.info("Joined GD lobby queue", { userId });
   };
 
   const handleLeave = () => {
+    logger.info("Leaving GD lobby queue", { userId });
     close();
     setJoined(false);
   };

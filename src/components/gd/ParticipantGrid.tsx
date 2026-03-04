@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import ParticipantTile from "./ParticipantTile";
 
 type Props = {
@@ -13,10 +14,15 @@ export default function ParticipantGrid({
   remotePeerIds,
   localLabel = "You",
 }: Props) {
+  const uniquePeerIds = useMemo(
+    () => [...new Set(remotePeerIds.filter(Boolean))],
+    [remotePeerIds],
+  );
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       <ParticipantTile stream={localStream} label={localLabel} isLocal />
-      {remotePeerIds.map((peerId) => (
+      {uniquePeerIds.map((peerId) => (
         <ParticipantTile key={peerId} stream={remoteStreams[peerId] || null} label={peerId} />
       ))}
     </div>

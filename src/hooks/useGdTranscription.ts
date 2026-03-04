@@ -1,77 +1,211 @@
 import { useEffect, useRef } from "react";
+import createLogger from "../utils/logger";
+
+const logger = createLogger("useGdTranscription");
 
 type TranscriptHandler = (text: string) => void;
 
 type SpeechRecognitionCtor = new () => SpeechRecognition;
 
-const getSpeechRecognition = (): SpeechRecognitionCtor | null => {
-  const anyWindow = window as typeof window & {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  };
-  return anyWindow.SpeechRecognition || anyWindow.webkitSpeechRecognition || null;
-};
+const getSpeechRecognition =
+	(): SpeechRecognitionCtor | null => {
+		const anyWindow = window as typeof window & {
+			SpeechRecognition?: SpeechRecognitionCtor;
+			webkitSpeechRecognition?: SpeechRecognitionCtor;
+		};
+		return (
+			anyWindow.SpeechRecognition ||
+			anyWindow.webkitSpeechRecognition ||
+			null
+		);
+	};
 
 export function useGdTranscription(params: {
-  enabled: boolean;
-  onTranscript: TranscriptHandler;
+	enabled: boolean;
+	onTranscript: TranscriptHandler;
 }) {
-  const { enabled, onTranscript } = params;
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const restartingRef = useRef(false);
+	const { enabled, onTranscript } = params;
+	const recognitionRef = useRef<SpeechRecognition | null>(
+		null,
+	);
+	const restartingRef = useRef(false);
+	const enabledRef = useRef(enabled);
+	const lastTranscriptRef = useRef("");
+	const lastTranscriptAtRef = useRef(0);
+	const canRestartRef = useRef(true);
+	const stoppingRef = useRef(false);
+	const lastErrorRef = useRef<string | null>(null);
+	const restartTimerRef = useRef<number | null>(null);
+	const networkRetryCountRef = useRef(0);
 
-  useEffect(() => {
-    const Recognition = getSpeechRecognition();
-    if (!enabled || !Recognition) return;
+	useEffect(() => {
+		enabledRef.current = enabled;
+	}, [enabled]);
 
-    const recognition = new Recognition();
-    recognitionRef.current = recognition;
-    recognition.continuous = true;
-    recognition.interimResults = false;
+	useEffect(() => {
+		const Recognition = getSpeechRecognition();
+		if (!enabled || !Recognition) {
+			logger.warn(
+				"Transcription disabled or SpeechRecognition not available",
+			);
+			return;
+		}
 
-    recognition.onresult = (event) => {
-      let finalText = "";
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalText += result[0]?.transcript ?? "";
-        }
-      }
-      const trimmed = finalText.trim();
-      if (trimmed) onTranscript(trimmed);
-    };
+		logger.info("Initializing GD Transcription");
+		const recognition = new Recognition();
+		recognitionRef.current = recognition;
+		recognition.continuous = true;
+		recognition.interimResults = false;
+		recognition.lang = navigator.language || "en-US";
+		recognition.maxAlternatives = 1;
+		canRestartRef.current = true;
+		stoppingRef.current = false;
+		lastErrorRef.current = null;
+		networkRetryCountRef.current = 0;
 
-    recognition.onerror = () => {
-      // ignore errors; browser may stop recognition
-    };
+		recognition.onresult = (event) => {
+			let finalText = "";
+			for (
+				let i = event.resultIndex;
+				i < event.results.length;
+				i += 1
+			) {
+				const result = event.results[i];
+				if (result.isFinal) {
+					finalText += result[0]?.transcript ?? "";
+				}
+			}
+			const trimmed = finalText.trim();
+			if (trimmed) {
+				const now = Date.now();
+				const isDuplicate =
+					lastTranscriptRef.current === trimmed &&
+					now - lastTranscriptAtRef.current < 1500;
+				if (isDuplicate) {
+					logger.debug(
+						"Skipping duplicate transcript chunk",
+						{
+							text: trimmed,
+						},
+					);
+					return;
+				}
+				lastTranscriptRef.current = trimmed;
+				lastTranscriptAtRef.current = now;
+				logger.debug("Transcript received", {
+					text: trimmed,
+					length: trimmed.length,
+				});
+				onTranscript(trimmed);
+			}
+		};
 
-    recognition.onend = () => {
-      if (!enabled) return;
-      if (restartingRef.current) return;
-      restartingRef.current = true;
-      window.setTimeout(() => {
-        restartingRef.current = false;
-        try {
-          recognition.start();
-        } catch {
-          // ignore
-        }
-      }, 500);
-    };
+		recognition.onerror = (event) => {
+			lastErrorRef.current = event.error;
+			const isExpectedAbort =
+				event.error === "aborted" &&
+				(restartingRef.current ||
+					stoppingRef.current ||
+					!enabledRef.current);
+			if (isExpectedAbort) {
+				logger.debug(
+					"Ignoring expected transcription abort",
+					{
+						error: event.error,
+					},
+				);
+				return;
+			}
+			if (event.error === "network") {
+				logger.info(
+					"Transcription network issue detected; will retry",
+				);
+			} else {
+				logger.warn("Transcription error", {
+					error: event.error,
+				});
+			}
+			if (
+				event.error === "not-allowed" ||
+				event.error === "service-not-allowed" ||
+				event.error === "audio-capture"
+			) {
+				canRestartRef.current = false;
+			}
+		};
 
-    try {
-      recognition.start();
-    } catch {
-      // ignore
-    }
+		recognition.onend = () => {
+			if (stoppingRef.current || !enabledRef.current) {
+				logger.debug(
+					"Transcription ended after intentional stop",
+				);
+				return;
+			}
+			logger.warn("Transcription ended");
+			if (!canRestartRef.current) {
+				logger.warn(
+					"Transcription restart disabled due to previous error",
+				);
+				return;
+			}
+			if (restartingRef.current) return;
+			restartingRef.current = true;
+			const restartReason = lastErrorRef.current || "ended";
+			const delayMs =
+				restartReason === "network"
+					? Math.min(
+							4000,
+							500 *
+								2 **
+									networkRetryCountRef.current,
+					  )
+					: 500;
+			if (restartReason === "network") {
+				networkRetryCountRef.current += 1;
+			} else {
+				networkRetryCountRef.current = 0;
+			}
+			logger.info("Restarting transcription", {
+				delayMs,
+				reason: restartReason,
+			});
+			restartTimerRef.current = window.setTimeout(() => {
+				restartingRef.current = false;
+				try {
+					if (!enabledRef.current) return;
+					lastErrorRef.current = null;
+					recognition.start();
+					networkRetryCountRef.current = 0;
+				} catch (error) {
+					logger.error(
+						"Failed to restart transcription",
+						error,
+					);
+				}
+			}, delayMs);
+		};
 
-    return () => {
-      try {
-        recognition.stop();
-      } catch {
-        // ignore
-      }
-      recognitionRef.current = null;
-    };
-  }, [enabled, onTranscript]);
+		try {
+			logger.info("Starting transcription");
+			recognition.start();
+		} catch (error) {
+			logger.error("Failed to start transcription", error);
+		}
+
+		return () => {
+			canRestartRef.current = false;
+			stoppingRef.current = true;
+			if (restartTimerRef.current !== null) {
+				window.clearTimeout(restartTimerRef.current);
+				restartTimerRef.current = null;
+			}
+			try {
+				logger.info("Stopping transcription");
+				recognition.stop();
+			} catch (error) {
+				logger.error("Failed to stop transcription", error);
+			}
+			recognitionRef.current = null;
+		};
+	}, [enabled, onTranscript]);
 }
