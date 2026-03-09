@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Card, Typography, Tag } from "antd";
 
 type TranscriptItem = {
@@ -14,12 +15,25 @@ type Props = {
 const { Title, Text } = Typography;
 
 export default function TranscriptPanel({ items }: Props) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!listRef.current) return;
+    listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [items]);
+
   return (
-    <Card className="rounded-2xl border border-slate-100">
-      <Title level={4} className="m-0!">
-        Live Transcript
-      </Title>
-      <div className="mt-3 max-h-64 overflow-y-auto space-y-3">
+    <Card className="h-full rounded-2xl border border-slate-100 [&_.ant-card-body]:flex [&_.ant-card-body]:h-full [&_.ant-card-body]:min-h-0 [&_.ant-card-body]:flex-col">
+      <div className="flex items-center justify-between">
+        <Title level={4} className="m-0!">
+          Live Transcript
+        </Title>
+        <Tag color="green" className="m-0">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500 align-middle" />{" "}
+          LIVE
+        </Tag>
+      </div>
+      <div ref={listRef} className="mt-3 h-full min-h-0 overflow-y-auto space-y-3 pr-1">
         {items.length === 0 && (
           <Text className="text-slate-500">No transcript yet.</Text>
         )}

@@ -51,6 +51,31 @@ export default function GdRoom() {
     [],
   );
 
+  const setTopicFromRoomState = useCallback(
+    (msg: GdRoomWsMessage) => {
+      if (msg.type !== "room_state") return;
+      const raw = msg as Record<string, unknown>;
+      const topicValue =
+        msg.topic ??
+        (typeof raw.topic_title === "string" ? raw.topic_title : null) ??
+        null;
+      const contextValue =
+        msg.context ??
+        (typeof raw.topic_context === "string" ? raw.topic_context : null) ??
+        null;
+      const points =
+        Array.isArray(msg.key_points) && msg.key_points.length > 0
+          ? msg.key_points
+          : Array.isArray(raw.key_points)
+            ? raw.key_points.filter((item): item is string => typeof item === "string")
+            : null;
+      setTopic(topicValue);
+      setContext(contextValue);
+      setKeyPoints(points);
+    },
+    [setTopic, setContext, setKeyPoints],
+  );
+
   const { isConnected, send, close } = useGdRoomSocket({
     httpBaseUrl: baseUrl,
     roomId: roomId || "",
@@ -59,9 +84,7 @@ export default function GdRoom() {
     onMessage: (msg: GdRoomWsMessage) => {
       logger.debug("Room message received", { type: msg.type });
       if (msg.type === "room_state") {
-        setTopic(msg.topic ?? null);
-        setContext(msg.context ?? null);
-        setKeyPoints(msg.key_points ?? null);
+        setTopicFromRoomState(msg);
         setPeerIds(normalizePeerIds(msg.peers.map((peer) => peer.user_id)));
         void handleRoomState(msg.peers, msg.reconnected).catch((error) => {
           logger.error("Failed handling room_state", error);
@@ -107,14 +130,15 @@ export default function GdRoom() {
       } else if (msg.type === "report_ack") {
         message.success(msg.message);
       } else if (msg.type === "transcript") {
-        if (!msg.text) return;
+        if (!msg.text?.trim()) return;
+        const nowMs = Date.now();
         setTranscripts((prev) => [
           ...prev,
           {
-            id: `${msg.from_user || "unknown"}-${msg.timestamp || Date.now()}`,
-            userId: msg.from_user || "unknown",
+            id: `${msg.from_user || "peer"}-${msg.timestamp || nowMs}`,
+            userId: msg.from_user || "peer",
             text: msg.text,
-            timestamp: msg.timestamp || Date.now() / 1000,
+            timestamp: msg.timestamp || nowMs / 1000,
           },
         ]);
       } else if (msg.type === "error") {
@@ -144,9 +168,18 @@ export default function GdRoom() {
 
   const handleTranscript = useCallback(
     (text: string) => {
-      send({ type: "transcript", text });
+      const now = Date.now();
+      setTranscripts((prev) => [
+        ...prev,
+        {
+          id: `${userId || "local"}-${now}`,
+          userId: userId || "local",
+          text,
+          timestamp: now / 1000,
+        },
+      ]);
     },
-    [send],
+    [userId],
   );
 
   useEffect(() => {
@@ -159,7 +192,7 @@ export default function GdRoom() {
   }, [roomId, userId, initLocalMedia]);
 
   useGdTranscription({
-    enabled: Boolean(isConnected && userId && isAudioEnabled && localStream),
+    enabled: Boolean(isConnected && userId && isAudioEnabled),
     onTranscript: handleTranscript,
   });
 
@@ -245,51 +278,90 @@ export default function GdRoom() {
   const reportablePeers = peerIds;
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-10">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+    <div className="h-[100dvh] overflow-hidden bg-gradient-to-b from-slate-100 to-white p-3 md:p-4">
+      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 md:px-5">
           <div>
-            <Title level={2} className="m-0!">
+            <Title level={3} className="m-0!">
               GD Room
             </Title>
             <Text className="text-slate-500">Room ID: {roomId}</Text>
           </div>
-          <ConnectionBadge connected={isConnected} />
+          <div className="flex items-center gap-3">
+            <Text className="hidden text-slate-500 md:inline">Peers: {peerIds.length + 1}</Text>
+            <ConnectionBadge connected={isConnected} />
+          </div>
         </div>
 
-        <TopicPanel topic={topic} context={context} keyPoints={keyPoints} />
+        <div className="flex min-h-0 flex-1">
+          <section className="flex min-w-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
+              <ParticipantGrid
+                localStream={localStream}
+                remoteStreams={remoteStreams}
+                remotePeerIds={peerIds}
+              />
+              <div className="mt-4 grid gap-4 lg:hidden">
+                <TopicPanel topic={topic} context={context} keyPoints={keyPoints} />
+                <Card className="rounded-2xl border border-slate-100">
+                  <Title level={5} className="m-0!">
+                    Report a participant
+                  </Title>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {reportablePeers.length === 0 && (
+                      <Text className="text-slate-500">No peers to report.</Text>
+                    )}
+                    {reportablePeers.map((peerId) => (
+                      <Button key={peerId} onClick={() => openReport(peerId)} size="small">
+                        Report {peerId}
+                      </Button>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+            </div>
 
-        <MediaControls
-          isAudioEnabled={isAudioEnabled}
-          isVideoEnabled={isVideoEnabled}
-          onToggleAudio={toggleAudio}
-          onToggleVideo={toggleVideo}
-          onLeave={handleLeave}
-        />
+            <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 md:px-5">
+              <div className="h-[28vh] min-h-[180px] max-h-[300px] md:h-[24vh] md:min-h-[200px] md:max-h-[340px]">
+                <TranscriptPanel items={transcripts} />
+              </div>
+            </div>
 
-        <ParticipantGrid
-          localStream={localStream}
-          remoteStreams={remoteStreams}
-          remotePeerIds={peerIds}
-        />
+            <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 md:px-5">
+              <MediaControls
+                isAudioEnabled={isAudioEnabled}
+                isVideoEnabled={isVideoEnabled}
+                onToggleAudio={toggleAudio}
+                onToggleVideo={toggleVideo}
+                onLeave={handleLeave}
+              />
+            </div>
+          </section>
 
-        <TranscriptPanel items={transcripts} />
-
-        <Card className="rounded-2xl border border-slate-100">
-          <Title level={4} className="m-0!">
-            Report a participant
-          </Title>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {reportablePeers.length === 0 && (
-              <Text className="text-slate-500">No peers to report.</Text>
-            )}
-            {reportablePeers.map((peerId) => (
-              <Button key={peerId} onClick={() => openReport(peerId)}>
-                Report {peerId}
-              </Button>
-            ))}
-          </div>
-        </Card>
+          <aside className="hidden w-[340px] flex-col border-l border-slate-200 bg-slate-50/70 lg:flex">
+            <div className="border-b border-slate-200 p-4">
+              <TopicPanel topic={topic} context={context} keyPoints={keyPoints} />
+            </div>
+            <div className="min-h-0 flex-1 p-4" />
+            <div className="border-t border-slate-200 p-4">
+              <Card className="rounded-2xl border border-slate-100">
+                <Title level={5} className="m-0!">
+                  Report a participant
+                </Title>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {reportablePeers.length === 0 && (
+                    <Text className="text-slate-500">No peers to report.</Text>
+                  )}
+                  {reportablePeers.map((peerId) => (
+                    <Button key={peerId} onClick={() => openReport(peerId)} size="small">
+                      Report {peerId}
+                    </Button>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          </aside>
+        </div>
       </div>
 
       <ReportModal

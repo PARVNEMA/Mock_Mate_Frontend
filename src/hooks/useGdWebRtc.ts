@@ -154,18 +154,31 @@ export function useGdWebRtc(params: {
 			return localStreamRef.current;
 		}
 		logger.info("Initializing local media");
-		const stream =
-			await navigator.mediaDevices.getUserMedia({
-				audio: true,
-				video: true,
-			});
+		let stream: MediaStream;
+		try {
+			stream =
+				await navigator.mediaDevices.getUserMedia({
+					audio: true,
+					video: true,
+				});
+		} catch (error) {
+			logger.warn(
+				"Video+audio capture failed, retrying with audio-only",
+				error,
+			);
+			stream =
+				await navigator.mediaDevices.getUserMedia({
+					audio: true,
+					video: false,
+				});
+		}
 		logger.info("Local media initialized successfully", {
 			streamId: stream.id,
 		});
 		localStreamRef.current = stream;
 		setLocalStream(stream);
-		setIsAudioEnabled(true);
-		setIsVideoEnabled(true);
+		setIsAudioEnabled(stream.getAudioTracks().length > 0);
+		setIsVideoEnabled(stream.getVideoTracks().length > 0);
 		return stream;
 	}, []);
 
