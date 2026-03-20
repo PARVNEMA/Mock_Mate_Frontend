@@ -1,5 +1,9 @@
-import { Button } from "antd";
+import { Button, Dropdown, Avatar } from "antd";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { UserOutlined, LogoutOutlined } from "@ant-design/icons";
+import { useAuth } from "../context/AuthContext";
+import axios from "axios";
 
 interface NavLink {
   name: string;
@@ -8,12 +12,54 @@ interface NavLink {
 
 const links: NavLink[] = [
   { name: "Home", href: "/" },
+  { name: "Quiz", href: "/quizselector" },
+  { name: "Interview", href: "/interview" },
+  { name: "GD", href: "/gd" },
   { name: "About", href: "/about" },
   { name: "Contact", href: "/contact" },
 ];
 
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+  const { userEmail, logout } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      const { data } = await axios.post(
+        `${import.meta.env.VITE_BACKEND_URL}/auth/logout`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+        },
+      );
+      console.log(data.message);
+      logout();
+      navigate("/");
+    } catch (error) {}
+  };
+
+  const profileMenu = {
+    items: [
+      {
+        key: "email",
+        label: <span className="text-gray-700 font-medium">{userEmail}</span>,
+        disabled: true,
+      },
+      {
+        type: "divider" as const,
+      },
+      {
+        key: "logout",
+        label: "Sign Out",
+        icon: <LogoutOutlined />,
+        danger: true,
+        onClick: handleLogout,
+      },
+    ],
+  };
 
   return (
     <nav className="w-full bg-white shadow-md">
@@ -21,7 +67,7 @@ const Header = () => {
         <div className="flex justify-between h-16 items-center">
           {/* Logo Section */}
           <div className="shrink-0 flex items-center">
-            <span className="text-xl font-bold text-blue-600">MyLogo</span>
+            <span className="text-xl font-bold text-blue-600">MockMate</span>
           </div>
 
           {/* Desktop Links */}
@@ -37,10 +83,30 @@ const Header = () => {
             ))}
           </div>
 
-          {/* Auth Buttons */}
+          {/* Auth Section */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button>SignIn</Button>
-            <Button>SignUp</Button>
+            {userEmail ? (
+              <Dropdown
+                menu={profileMenu}
+                trigger={["hover", "click"]}
+                placement="bottomRight"
+              >
+                <div className="flex items-center gap-2 cursor-pointer group">
+                  <Avatar
+                    icon={<UserOutlined />}
+                    className="bg-blue-600 group-hover:bg-blue-700 transition-colors cursor-pointer"
+                    size={38}
+                  />
+                </div>
+              </Dropdown>
+            ) : (
+              <>
+                <Button onClick={() => navigate("/signin")}>SignIn</Button>
+                <Button type="primary" onClick={() => navigate("/signup")}>
+                  SignUp
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -68,8 +134,21 @@ const Header = () => {
             </a>
           ))}
           <hr />
-          <Button>SignIn</Button>
-          <Button>SignUp</Button>
+          {userEmail ? (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-500 px-1">{userEmail}</p>
+              <Button danger onClick={handleLogout} block>
+                Sign Out
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Button onClick={() => navigate("/signin")}>SignIn</Button>
+              <Button type="primary" onClick={() => navigate("/signup")}>
+                SignUp
+              </Button>
+            </>
+          )}
         </div>
       )}
     </nav>

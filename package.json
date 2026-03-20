@@ -10,13 +10,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
     "@supabase/supabase-js": "^2.95.3",
     "@tailwindcss/vite": "^4.1.18",
     "antd": "^6.3.0",
+    "axios": "^1.13.5",
+    "edge-tts-universal": "^1.3.3",
+    "jspdf": "^4.2.0",
+    "jspdf-autotable": "^5.0.7",
+    "leva": "^0.10.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0",
-    "tailwindcss": "^4.1.18"
+    "react-speech-recognition": "^4.0.1",
+    "tailwindcss": "^4.1.18",
+    "wawa-lipsync": "^0.0.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
