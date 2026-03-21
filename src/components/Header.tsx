@@ -1,5 +1,5 @@
-import { Button, Dropdown, Avatar } from "antd";
-import { useState } from "react";
+import { Button, Dropdown, Avatar, Switch } from "antd";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserOutlined, LogoutOutlined } from "@ant-design/icons";
 import { useAuth } from "../context/AuthContext";
@@ -23,6 +23,12 @@ const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const { userEmail, logout } = useAuth();
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved) return saved !== "dark";
+
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
 
   const handleLogout = async () => {
     try {
@@ -61,6 +67,17 @@ const Header = () => {
     ],
   };
 
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dark) {
+      root.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      root.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [dark]);
+
   return (
     <nav className="w-full bg-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -85,10 +102,13 @@ const Header = () => {
 
           {/* Auth Section */}
           <div className="hidden md:flex items-center space-x-4">
+            <div>
+              <Switch onChange={() => setDark(!dark)} />
+            </div>
             {userEmail ? (
               <Dropdown
                 menu={profileMenu}
-                trigger={["hover", "click"]}
+                trigger={["click"]}
                 placement="bottomRight"
               >
                 <div className="flex items-center gap-2 cursor-pointer group">

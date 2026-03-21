@@ -16,6 +16,7 @@ import InterviewRoom from "./pages/InterviewRoom.tsx";
 import InterviewReport from "./pages/InterviewReport.tsx";
 import GdLobby from "./pages/GdLobby.tsx";
 import GdRoom from "./pages/GdRoom.tsx";
+import axios from "axios";
 
 const router = createBrowserRouter([
   {
@@ -57,6 +58,21 @@ const router = createBrowserRouter([
       {
         path: "/quizselector",
         element: <QuizSelector />,
+        loader: async () => {
+          try {
+            const response = await axios.get(
+              `${import.meta.env.VITE_BACKEND_URL}/quizzes/skills`,
+              {
+                headers: {
+                  Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+                },
+              },
+            );
+            return response.data;
+          } catch (error) {
+            console.error("Error fetching preset skills:", error);
+          }
+        },
       },
       {
         path: "/quiz",

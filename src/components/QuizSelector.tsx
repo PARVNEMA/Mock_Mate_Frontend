@@ -7,7 +7,7 @@ import {
   StarOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom";
+import { useLoaderData, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 const { Title, Text } = Typography;
@@ -20,7 +20,7 @@ interface Skill {
 
 const QuizSelector = () => {
   const [skills, setSkills] = useState<string[]>([]);
-  const [presetSkills, setPresetSkills] = useState<Skill[]>([]);
+  const [presetSkills, setPresetSkills] = useState<Skill[]>(useLoaderData());
   const [skillInput, setSkillInput] = useState("");
   const [customRole, setCustomRole] = useState("");
   const navigate = useNavigate();

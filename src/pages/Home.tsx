@@ -5,8 +5,6 @@ import {
   VideoCameraOutlined,
   TeamOutlined,
   ArrowRightOutlined,
-  HistoryOutlined,
-  LineChartOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 
@@ -112,36 +110,6 @@ const Home: React.FC = () => {
             </Card>
           </Col>
         </Row>
-
-        {/* Secondary Stats/History (Placeholder) */}
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-6 bg-white rounded-2xl border border-slate-100 flex items-center gap-4">
-            <div className="p-3 bg-slate-50 rounded-lg text-slate-400">
-              <HistoryOutlined />
-            </div>
-            <div>
-              <Text className="block text-xs font-bold text-slate-400 uppercase">
-                Total Sessions
-              </Text>
-              <Title level={4} className="m-0!">
-                0
-              </Title>
-            </div>
-          </div>
-          <div className="p-6 bg-white rounded-2xl border border-slate-100 flex items-center gap-4">
-            <div className="p-3 bg-slate-50 rounded-lg text-slate-400">
-              <LineChartOutlined />
-            </div>
-            <div>
-              <Text className="block text-xs font-bold text-slate-400 uppercase">
-                Avg. Accuracy
-              </Text>
-              <Title level={4} className="m-0!">
-                0%
-              </Title>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
