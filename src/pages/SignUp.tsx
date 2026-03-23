@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import {
   Button,
   Form,
@@ -24,7 +24,6 @@ import type { RcFile, UploadFile } from "antd/es/upload/interface";
 
 const { Title, Text } = Typography;
 
-// Precise payload type based on your requirement
 type FieldType = {
   fullname?: string;
   email?: string;
@@ -45,7 +44,6 @@ const SignUp: React.FC = () => {
     headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
   });
 
-  // Convert uploaded image to base64 string
   const getBase64 = (img: RcFile, callback: (url: string) => void) => {
     const reader = new FileReader();
     reader.addEventListener("load", () => callback(reader.result as string));
@@ -65,45 +63,33 @@ const SignUp: React.FC = () => {
     }
   };
 
-  const getProfile = async () => {
-    try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_BACKEND_URL}/profiles/me`,
-        { ...getAuthHeaders() },
-      );
-      console.log("Profile fetched successfully:", response.data);
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-    }
-  };
-
   const onFinish = async (values: FieldType) => {
     setSubmitting(true);
     try {
-      // Constructing the unified payload
       const payload = {
         fullname: values.fullname,
         email: values.email,
         password: values.password,
-        avatar: imageUrl, // Base64 string from state
+        avatar: imageUrl,
       };
 
       const { data } = await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}/auth/signup`,
         payload,
-        {},
       );
 
-      console.log("Signup successful:", data);
-
-      // Auto-login after signup
       login(
         data.user.email,
         data.session.access_token,
         data.session.refresh_token,
         data.user.id,
       );
-      getProfile();
+
+      // Auto-trigger profile fetch to ensure DB sync
+      await axios.get(
+        `${import.meta.env.VITE_BACKEND_URL}/profiles/me`,
+        getAuthHeaders(),
+      );
 
       message.success("Welcome aboard!");
       navigate("/");
@@ -114,58 +100,69 @@ const SignUp: React.FC = () => {
     }
   };
 
+  // Modern Input Styling for Light/Dark
+  const inputStyles =
+    "rounded-xl h-11 border-slate-200! dark:border-slate-700! bg-white! dark:bg-slate-800! text-slate-900! dark:text-slate-100! placeholder:text-slate-400! dark:placeholder:text-slate-500! hover:border-blue-500! transition-all";
+
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4 py-12">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl shadow-slate-200/50 p-8 border border-slate-100">
-        {/* Header Section */}
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 rotate-3 shadow-lg shadow-blue-200">
-            <RocketOutlined className="text-3xl text-white" />
+    <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 px-4 py-12 transition-colors duration-300 relative overflow-hidden">
+      {/* Abstract Background Blur */}
+      <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500/10 dark:bg-blue-600/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-indigo-500/10 dark:bg-indigo-600/5 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl dark:shadow-black/40 p-8 border border-slate-100 dark:border-slate-800">
+        {/* Brand Header */}
+        <div className="text-center mb-8">
+          <div className="w-14 h-14 bg-linear-to-tr from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 rotate-3 shadow-xl shadow-blue-500/20">
+            <RocketOutlined className="text-2xl text-white" />
           </div>
           <Title
             level={2}
-            className="m-0! tracking-tight font-extrabold text-slate-800"
+            className="m-0! font-black! tracking-tight! text-slate-900! dark:text-white!"
           >
             Create Account
           </Title>
-          <Text className="text-slate-400 block mt-1">
+          <Text className="text-slate-500! dark:text-slate-400! block mt-2 text-sm font-medium">
             Start your AI-powered interview journey
           </Text>
         </div>
 
-        <Divider className="border-slate-100" />
+        <Divider className="border-slate-100! dark:border-slate-800! my-6!" />
 
         <Form
           form={form}
-          name="signup"
           layout="vertical"
           onFinish={onFinish}
           requiredMark={false}
-          className="mt-4"
+          className="space-y-1"
         >
-          {/* Avatar Upload Section */}
-          <div className="flex flex-col items-center mb-6">
+          {/* Avatar Section */}
+          <div className="flex flex-col items-center mb-8">
             <Upload
               name="avatar"
               listType="picture-circle"
-              className="avatar-uploader"
+              className="avatar-uploader bg-transparent!"
               showUploadList={false}
               onChange={handleAvatarChange}
               customRequest={({ onSuccess }) =>
                 setTimeout(() => onSuccess?.("ok"), 0)
-              } // Prevents upload error on client-side only preview
+              }
             >
               {imageUrl ? (
                 <img
                   src={imageUrl}
                   alt="avatar"
-                  className="w-full h-full rounded-full object-cover"
+                  className="w-full h-full rounded-full object-cover border-2 border-white dark:border-slate-800 shadow-sm"
                 />
               ) : (
-                <div className="flex flex-col items-center">
-                  {loadingAvatar ? <LoadingOutlined /> : <PlusOutlined />}
-                  <div className="mt-1 text-xs font-medium text-slate-400">
-                    Avatar
+                <div className="flex flex-col items-center text-slate-400 dark:text-slate-500">
+                  {loadingAvatar ? (
+                    <LoadingOutlined />
+                  ) : (
+                    <PlusOutlined className="text-lg" />
+                  )}
+                  <div className="mt-1 text-[10px] font-bold uppercase tracking-wider">
+                    Upload
                   </div>
                 </div>
               )}
@@ -175,74 +172,76 @@ const SignUp: React.FC = () => {
           <Form.Item
             name="fullname"
             label={
-              <span className="text-slate-600 font-medium">Full Name</span>
+              <span className="text-slate-600 dark:text-slate-400 font-semibold text-xs uppercase tracking-wider ml-1">
+                Full Name
+              </span>
             }
-            rules={[{ required: true, message: "Please enter your name!" }]}
+            rules={[{ required: true, message: "Name is required" }]}
           >
             <Input
-              prefix={<UserOutlined className="text-slate-300 mr-2" />}
+              prefix={<UserOutlined className="text-slate-400 mr-2" />}
               placeholder="John Doe"
-              className="rounded-xl h-11 border-slate-200 focus:border-blue-500"
+              className={inputStyles}
             />
           </Form.Item>
 
           <Form.Item
             name="email"
             label={
-              <span className="text-slate-600 font-medium">Email Address</span>
+              <span className="text-slate-600 dark:text-slate-400 font-semibold text-xs uppercase tracking-wider ml-1">
+                Email Address
+              </span>
             }
             rules={[
               {
                 required: true,
                 type: "email",
-                message: "Enter a valid email!",
+                message: "Valid email required",
               },
             ]}
           >
             <Input
-              prefix={<MailOutlined className="text-slate-300 mr-2" />}
+              prefix={<MailOutlined className="text-slate-400 mr-2" />}
               placeholder="name@university.edu"
-              className="rounded-xl h-11 border-slate-200 focus:border-blue-500"
+              className={inputStyles}
             />
           </Form.Item>
 
           <Form.Item
             name="password"
-            label={<span className="text-slate-600 font-medium">Password</span>}
-            rules={[
-              {
-                required: true,
-                min: 6,
-                message: "Password must be 6+ characters!",
-              },
-            ]}
+            label={
+              <span className="text-slate-600 dark:text-slate-400 font-semibold text-xs uppercase tracking-wider ml-1">
+                Password
+              </span>
+            }
+            rules={[{ required: true, min: 6, message: "Min 6 characters" }]}
           >
             <Input.Password
-              prefix={<LockOutlined className="text-slate-300 mr-2" />}
+              prefix={<LockOutlined className="text-slate-400 mr-2" />}
               placeholder="••••••••"
-              className="rounded-xl h-11 border-slate-200 focus:border-blue-500"
+              className={inputStyles}
             />
           </Form.Item>
 
-          <Form.Item className="mt-8">
+          <Form.Item className="mt-8! mb-2!">
             <Button
               type="primary"
               htmlType="submit"
               block
               loading={submitting}
-              className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 border-none font-bold text-lg shadow-lg shadow-blue-100"
+              className="h-12 rounded-xl! bg-blue-600! hover:bg-blue-700! dark:bg-indigo-600! dark:hover:bg-indigo-500! border-none! font-bold! text-base! shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all"
             >
-              Sign Up
+              Create My Account
             </Button>
           </Form.Item>
         </Form>
 
         <div className="text-center mt-4">
-          <Text className="text-slate-400">
+          <Text className="text-slate-500! dark:text-slate-400! text-sm">
             Already have an account?{" "}
             <a
               href="/signin"
-              className="text-blue-600 hover:text-blue-700 font-bold"
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 font-bold transition-colors"
             >
               Sign In
             </a>

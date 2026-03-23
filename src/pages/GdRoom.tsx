@@ -1,19 +1,28 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, Typography, message } from "antd";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Card, Typography, message, Space, Divider } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useGdRoomSocket } from "../hooks/useGdRoomSocket";
 import { useGdWebRtc } from "../hooks/useGdWebRtc";
 import { useGdTranscription } from "../hooks/useGdTranscription";
-import type { GdRoomWsMessage, ReportRequest } from "../types/gd";
+import type { GdRoomWsMessage } from "../types/gd";
 import ParticipantGrid from "../components/gd/ParticipantGrid";
 import MediaControls from "../components/gd/MediaControls";
 import TopicPanel from "../components/gd/TopicPanel";
 import ConnectionBadge from "../components/gd/ConnectionBadge";
 import ReportModal from "../components/gd/ReportModal";
 import TranscriptPanel from "../components/gd/TranscriptPanel";
-import { reportPeer as reportPeerRest, leaveRoom as leaveRoomRest } from "../services/gdApi";
+import {
+  reportPeer as reportPeerRest,
+  leaveRoom as leaveRoomRest,
+} from "../services/gdApi";
 import createLogger from "../utils/logger";
+import {
+  InfoCircleOutlined,
+  UsergroupAddOutlined,
+  LogoutOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
 
 const { Title, Text } = Typography;
 const logger = createLogger("GdRoom");
@@ -37,9 +46,7 @@ export default function GdRoom() {
     (ids: string[]): string[] => {
       const unique = new Set<string>();
       ids.forEach((id) => {
-        if (!id) return;
-        if (id === userId) return;
-        unique.add(id);
+        if (id && id !== userId) unique.add(id);
       });
       return [...unique];
     },
@@ -51,30 +58,13 @@ export default function GdRoom() {
     [],
   );
 
-  const setTopicFromRoomState = useCallback(
-    (msg: GdRoomWsMessage) => {
-      if (msg.type !== "room_state") return;
-      const raw = msg as Record<string, unknown>;
-      const topicValue =
-        msg.topic ??
-        (typeof raw.topic_title === "string" ? raw.topic_title : null) ??
-        null;
-      const contextValue =
-        msg.context ??
-        (typeof raw.topic_context === "string" ? raw.topic_context : null) ??
-        null;
-      const points =
-        Array.isArray(msg.key_points) && msg.key_points.length > 0
-          ? msg.key_points
-          : Array.isArray(raw.key_points)
-            ? raw.key_points.filter((item): item is string => typeof item === "string")
-            : null;
-      setTopic(topicValue);
-      setContext(contextValue);
-      setKeyPoints(points);
-    },
-    [setTopic, setContext, setKeyPoints],
-  );
+  const setTopicFromRoomState = useCallback((msg: GdRoomWsMessage) => {
+    if (msg.type !== "room_state") return;
+    const raw = msg as Record<string, any>;
+    setTopic(msg.topic ?? raw.topic_title ?? null);
+    setContext(msg.context ?? raw.topic_context ?? null);
+    setKeyPoints(msg.key_points ?? raw.key_points ?? null);
+  }, []);
 
   const { isConnected, send, close } = useGdRoomSocket({
     httpBaseUrl: baseUrl,
@@ -82,67 +72,40 @@ export default function GdRoom() {
     userId: userId || "",
     enabled: Boolean(roomId && userId),
     onMessage: (msg: GdRoomWsMessage) => {
-      logger.debug("Room message received", { type: msg.type });
       if (msg.type === "room_state") {
         setTopicFromRoomState(msg);
-        setPeerIds(normalizePeerIds(msg.peers.map((peer) => peer.user_id)));
-        void handleRoomState(msg.peers, msg.reconnected).catch((error) => {
-          logger.error("Failed handling room_state", error);
-        });
+        setPeerIds(normalizePeerIds(msg.peers.map((p) => p.user_id)));
+        void handleRoomState(msg.peers, msg.reconnected);
       } else if (msg.type === "peer_joined") {
-        if (msg.peer_id === userId) {
-          logger.debug("Ignoring self peer_joined event", { peerId: msg.peer_id });
-          return;
+        if (msg.peer_id !== userId) {
+          setPeerIds((prev) =>
+            prev.includes(msg.peer_id) ? prev : [...prev, msg.peer_id],
+          );
+          void handlePeerJoined(msg.peer_id);
         }
-        setPeerIds((prev) => (prev.includes(msg.peer_id) ? prev : [...prev, msg.peer_id]));
-        void handlePeerJoined(msg.peer_id).catch((error) => {
-          logger.error("Failed handling peer_joined", error);
-        });
       } else if (msg.type === "peer_left") {
         setPeerIds((prev) => prev.filter((id) => id !== msg.peer_id));
         handlePeerLeft(msg.peer_id);
-      } else if (msg.type === "offer") {
-        if (msg.from_user) {
-          void handleOffer(msg.from_user, msg.sdp).catch((error) => {
-            logger.error("Failed handling offer", error);
-          });
-        }
-      } else if (msg.type === "answer") {
-        if (msg.from_user) {
-          void handleAnswer(msg.from_user, msg.sdp).catch((error) => {
-            logger.error("Failed handling answer", error);
-          });
-        }
-      } else if (msg.type === "ice_candidate") {
-        if (msg.from_user) {
-          void handleIceCandidate(msg.from_user, msg.candidate).catch((error) => {
-            logger.error("Failed handling ice_candidate", error);
-          });
-        }
-      } else if (msg.type === "warning") {
-        message.warning(msg.message);
-      } else if (msg.type === "blacklisted") {
-        message.error(msg.message);
-        navigate("/gd");
-      } else if (msg.type === "room_ended") {
-        message.info(msg.reason || "Room ended.");
-        navigate("/gd");
-      } else if (msg.type === "report_ack") {
-        message.success(msg.message);
-      } else if (msg.type === "transcript") {
-        if (!msg.text?.trim()) return;
+      } else if (msg.type === "offer" && msg.from_user) {
+        void handleOffer(msg.from_user, msg.sdp);
+      } else if (msg.type === "answer" && msg.from_user) {
+        void handleAnswer(msg.from_user, msg.sdp);
+      } else if (msg.type === "ice_candidate" && msg.from_user) {
+        void handleIceCandidate(msg.from_user, msg.candidate);
+      } else if (msg.type === "transcript" && msg.text?.trim()) {
         const nowMs = Date.now();
         setTranscripts((prev) => [
           ...prev,
           {
             id: `${msg.from_user || "peer"}-${msg.timestamp || nowMs}`,
             userId: msg.from_user || "peer",
-            text: msg.text,
+            text: msg.text!,
             timestamp: msg.timestamp || nowMs / 1000,
           },
         ]);
-      } else if (msg.type === "error") {
-        message.error(msg.message);
+      } else if (msg.type === "room_ended" || msg.type === "blacklisted") {
+        message.info(msg.message || "Session ended.");
+        navigate("/gd");
       }
     },
   });
@@ -162,9 +125,7 @@ export default function GdRoom() {
     toggleAudio,
     toggleVideo,
     stopAll,
-  } = useGdWebRtc({
-    send: (payload) => send(payload),
-  });
+  } = useGdWebRtc({ send });
 
   const handleTranscript = useCallback(
     (text: string) => {
@@ -183,12 +144,7 @@ export default function GdRoom() {
   );
 
   useEffect(() => {
-    if (!roomId || !userId) return;
-    logger.info("Initializing local media on room join", { roomId, userId });
-    void initLocalMedia().catch((error) => {
-      logger.error("Failed to initialize local media on room join", error);
-      message.error("Please allow camera and microphone permissions to join the room.");
-    });
+    if (roomId && userId) void initLocalMedia();
   }, [roomId, userId, initLocalMedia]);
 
   useGdTranscription({
@@ -197,123 +153,108 @@ export default function GdRoom() {
   });
 
   const handleLeave = async () => {
-    logger.info("Leaving GD room", { roomId, userId });
     send({ type: "leave_room" });
     close();
     stopAll();
-    if (roomId) {
-      const accessToken = String(localStorage.getItem("accessToken") || "");
-      if (accessToken) {
-        try {
-          await leaveRoomRest(accessToken);
-          logger.info("Leave room REST call completed");
-        } catch {}
-      }
-    }
+    const accessToken = localStorage.getItem("accessToken");
+    if (accessToken)
+      try {
+        await leaveRoomRest(accessToken);
+      } catch {}
     navigate("/gd");
   };
 
-  const openReport = (peerId: string) => {
-    logger.info("Opening report modal", { peerId });
-    setReportPeerId(peerId);
-    setReportOpen(true);
-  };
-
-  const handleReportSubmit = async (payload: ReportRequest) => {
-    if (!roomId) return;
-    setReportOpen(false);
-    if (send({ type: "report", ...payload })) {
-      logger.info("Report sent via WS", {
-        roomId,
-        reported_user_id: payload.reported_user_id,
-      });
-      return;
-    }
-    const accessToken = String(localStorage.getItem("accessToken") || "");
-    if (accessToken) {
-      try {
-        await reportPeerRest(accessToken, roomId, payload);
-        message.success("Report submitted.");
-        logger.info("Report submitted via REST fallback", {
-          roomId,
-          reported_user_id: payload.reported_user_id,
-        });
-      } catch {
-        message.error("Report failed.");
-        logger.error("Report REST fallback failed", {
-          roomId,
-          reported_user_id: payload.reported_user_id,
-        });
-      }
-    }
-  };
-
-  if (!roomId) {
+  if (!roomId || !userId) {
     return (
-      <div className="min-h-screen bg-slate-50 p-6">
-        <Card className="max-w-xl mx-auto rounded-2xl">
-          <Title level={4} className="m-0!">
-            Missing room id
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+        <Card className="w-full max-w-md rounded-3xl! border-none bg-slate-900 text-center">
+          <InfoCircleOutlined className="mb-4 text-4xl text-indigo-500" />
+          <Title level={4} className="text-white!">
+            Session Unavailable
           </Title>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!userId) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-6">
-        <Card className="max-w-xl mx-auto rounded-2xl">
-          <Title level={4} className="m-0!">
-            Please sign in to join the room.
-          </Title>
-          <Button className="mt-4" type="primary" onClick={() => navigate("/signin")}>
-            Go to Sign In
+          <Text className="text-slate-400">
+            Please sign in and provide a valid Room ID to join the discussion.
+          </Text>
+          <Button
+            type="primary"
+            block
+            className="mt-8 h-12 rounded-xl! bg-indigo-600! border-none"
+            onClick={() => navigate("/signin")}
+          >
+            Sign In to Join
           </Button>
         </Card>
       </div>
     );
   }
 
-  const reportablePeers = peerIds;
-
   return (
-    <div className="h-[100dvh] overflow-hidden bg-gradient-to-b from-slate-100 to-white p-3 md:p-4">
-      <div className="mx-auto flex h-full w-full max-w-[1440px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 md:px-5">
-          <div>
-            <Title level={3} className="m-0!">
-              GD Room
-            </Title>
-            <Text className="text-slate-500">Room ID: {roomId}</Text>
-          </div>
-          <div className="flex items-center gap-3">
-            <Text className="hidden text-slate-500 md:inline">Peers: {peerIds.length + 1}</Text>
+    <div className="h-dvh overflow-hidden bg-slate-950 p-2 md:p-4 transition-colors duration-500">
+      <div className="mx-auto flex h-full w-full max-w-400 flex-col overflow-hidden rounded-4xl border border-slate-800 bg-slate-900/50 shadow-2xl backdrop-blur-md">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+          <Space size="large">
+            <div>
+              <Title
+                level={4}
+                className="m-0! font-black! tracking-tight! text-white! flex items-center gap-2"
+              >
+                <UsergroupAddOutlined className="text-indigo-500" /> GD Session
+              </Title>
+              <Text className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
+                Room: {roomId}
+              </Text>
+            </div>
+          </Space>
+
+          <Space size="middle">
+            <div className="hidden md:flex items-center gap-2 bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700">
+              <div className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+              <Text className="text-xs text-slate-300 font-bold">
+                {peerIds.length + 1} Active
+              </Text>
+            </div>
             <ConnectionBadge connected={isConnected} />
-          </div>
+          </Space>
         </div>
 
         <div className="flex min-h-0 flex-1">
+          {/* Main Stage */}
           <section className="flex min-w-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
               <ParticipantGrid
                 localStream={localStream}
                 remoteStreams={remoteStreams}
                 remotePeerIds={peerIds}
               />
-              <div className="mt-4 grid gap-4 lg:hidden">
-                <TopicPanel topic={topic} context={context} keyPoints={keyPoints} />
-                <Card className="rounded-2xl border border-slate-100">
-                  <Title level={5} className="m-0!">
-                    Report a participant
+
+              {/* Mobile Sidebar Fallback */}
+              <div className="mt-6 grid gap-4 lg:hidden">
+                <TopicPanel
+                  topic={topic}
+                  context={context}
+                  keyPoints={keyPoints}
+                />
+                <Card className="rounded-2xl! border-slate-800 bg-slate-900/80">
+                  <Title
+                    level={5}
+                    className="text-slate-300! mb-4! flex items-center gap-2"
+                  >
+                    <WarningOutlined className="text-amber-500" /> Moderation
                   </Title>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {reportablePeers.length === 0 && (
-                      <Text className="text-slate-500">No peers to report.</Text>
-                    )}
-                    {reportablePeers.map((peerId) => (
-                      <Button key={peerId} onClick={() => openReport(peerId)} size="small">
-                        Report {peerId}
+                  <div className="flex flex-wrap gap-2">
+                    {peerIds.map((id) => (
+                      <Button
+                        key={id}
+                        ghost
+                        size="small"
+                        className="rounded-lg! border-slate-700 text-slate-400 hover:text-red-400!"
+                        onClick={() => {
+                          setReportPeerId(id);
+                          setReportOpen(true);
+                        }}
+                      >
+                        Report {id.slice(0, 6)}...
                       </Button>
                     ))}
                   </div>
@@ -321,13 +262,15 @@ export default function GdRoom() {
               </div>
             </div>
 
-            <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 md:px-5">
-              <div className="h-[28vh] min-h-[180px] max-h-[300px] md:h-[24vh] md:min-h-[200px] md:max-h-[340px]">
+            {/* Transcript Area */}
+            <div className="shrink-0 border-t border-slate-800 bg-slate-950/50 px-4 py-2">
+              <div className="h-[22vh] min-h-40 max-h-70">
                 <TranscriptPanel items={transcripts} />
               </div>
             </div>
 
-            <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 md:px-5">
+            {/* Floating Style Media Controls */}
+            <div className="border-t border-slate-800 bg-slate-900 px-6 py-4">
               <MediaControls
                 isAudioEnabled={isAudioEnabled}
                 isVideoEnabled={isVideoEnabled}
@@ -338,27 +281,67 @@ export default function GdRoom() {
             </div>
           </section>
 
-          <aside className="hidden w-[340px] flex-col border-l border-slate-200 bg-slate-50/70 lg:flex">
-            <div className="border-b border-slate-200 p-4">
-              <TopicPanel topic={topic} context={context} keyPoints={keyPoints} />
-            </div>
-            <div className="min-h-0 flex-1 p-4" />
-            <div className="border-t border-slate-200 p-4">
-              <Card className="rounded-2xl border border-slate-100">
-                <Title level={5} className="m-0!">
-                  Report a participant
+          {/* Sidebar - Desktop Only */}
+          <aside className="hidden w-95 flex-col border-l border-slate-800 bg-slate-900/30 lg:flex">
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+              <TopicPanel
+                topic={topic}
+                context={context}
+                keyPoints={keyPoints}
+              />
+
+              <Divider className="border-slate-800" />
+
+              <Card className="rounded-2xl! border-slate-800 bg-indigo-500/5 backdrop-blur-sm p-2">
+                <Title
+                  level={5}
+                  className="text-white! mb-4! text-sm! uppercase tracking-widest opacity-70"
+                >
+                  Moderation Tools
                 </Title>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {reportablePeers.length === 0 && (
-                    <Text className="text-slate-500">No peers to report.</Text>
+                <div className="space-y-2">
+                  {peerIds.length === 0 ? (
+                    <Text className="text-slate-600 italic block text-center py-4">
+                      Waiting for peers...
+                    </Text>
+                  ) : (
+                    peerIds.map((peerId) => (
+                      <div
+                        key={peerId}
+                        className="flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-slate-700/50"
+                      >
+                        <Text className="text-slate-300 font-mono text-xs">
+                          {peerId.slice(0, 12)}...
+                        </Text>
+                        <Button
+                          danger
+                          type="text"
+                          size="small"
+                          icon={<WarningOutlined />}
+                          onClick={() => {
+                            setReportPeerId(peerId);
+                            setReportOpen(true);
+                          }}
+                        >
+                          Report
+                        </Button>
+                      </div>
+                    ))
                   )}
-                  {reportablePeers.map((peerId) => (
-                    <Button key={peerId} onClick={() => openReport(peerId)} size="small">
-                      Report {peerId}
-                    </Button>
-                  ))}
                 </div>
               </Card>
+            </div>
+
+            <div className="p-6 border-t border-slate-800">
+              <Button
+                block
+                danger
+                icon={<LogoutOutlined />}
+                className="h-12 rounded-xl! border-red-500/30! bg-red-500/10! hover:bg-red-500! font-bold"
+                onClick={handleLeave}
+              >
+                Leave Room
+              </Button>
             </div>
           </aside>
         </div>
@@ -368,7 +351,14 @@ export default function GdRoom() {
         open={reportOpen}
         peerId={reportPeerId}
         onCancel={() => setReportOpen(false)}
-        onSubmit={handleReportSubmit}
+        onSubmit={async (p) => {
+          setReportOpen(false);
+          if (!send({ type: "report", ...p })) {
+            const token = localStorage.getItem("accessToken");
+            if (token && roomId) await reportPeerRest(token, roomId, p);
+          }
+          message.success("User reported to moderators.");
+        }}
       />
     </div>
   );

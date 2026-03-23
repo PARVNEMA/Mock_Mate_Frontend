@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from "react-router-dom";
+﻿import { useLocation, useNavigate } from "react-router-dom";
 import {
   Tag,
   Radio,
@@ -9,7 +9,12 @@ import {
   Spin,
   message,
 } from "antd";
-import { DownloadOutlined, LeftOutlined } from "@ant-design/icons";
+import {
+  DownloadOutlined,
+  LeftOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+} from "@ant-design/icons";
 import axios from "axios";
 import { useEffect, useState } from "react";
 import jsPDF from "jspdf";
@@ -21,6 +26,7 @@ interface QuizState {
   skills: string[];
   role: string;
   type: "quick" | "job-role";
+  questionCount: number;
 }
 
 interface QuizQuestion {
@@ -52,6 +58,7 @@ function Quiz() {
   const skills = state?.skills ?? [];
   const role = state?.role ?? "";
   const quizType = state?.type ?? "quick";
+  const questionCount = state?.questionCount ?? 10;
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [selectedAnswers, setSelectedAnswers] = useState<
@@ -72,7 +79,7 @@ function Quiz() {
         type: quizType,
         skill_names: quizType === "quick" ? skills : [],
         job_description: quizType === "job-role" ? role : "",
-        num_questions: 10,
+        num_questions: questionCount,
       };
 
       const { data } = await axios.post(
@@ -81,7 +88,6 @@ function Quiz() {
         getAuthHeaders(),
       );
       setQuestions(data.questions);
-      console.log("Questions fetched successfully");
     } catch (error) {
       message.error("Error loading quiz questions.");
     } finally {
@@ -98,7 +104,6 @@ function Quiz() {
   };
 
   const handleSubmit = async () => {
-    // 1. Validation: Ensure all questions are answered to prevent backend math errors
     if (Object.keys(selectedAnswers).length < questions.length) {
       message.warning("Please answer all questions before submitting.");
       return;
@@ -106,15 +111,14 @@ function Quiz() {
 
     setSubmitting(true);
     try {
-      // 2. Construct the payload to match your working JSON exactly
       const payload = {
-        session_type: String(quizType), // "quick" or "job-role"
+        session_type: String(quizType),
         selected_skills: quizType === "quick" ? skills : [],
-        job_description: quizType === "job-role" ? String(role) : "", // Ensure empty string, not null
+        job_description: quizType === "job-role" ? String(role) : "",
         extracted_skills: quizType === "quick" ? skills : [],
         answers: questions.map((q) => ({
           question_id: q.id,
-          selected_option: Number(selectedAnswers[q.id]), // Ensure it's a Number
+          selected_option: Number(selectedAnswers[q.id]),
         })),
       };
 
@@ -126,14 +130,9 @@ function Quiz() {
 
       setQuizResult(data);
       message.success("Quiz submitted successfully!");
+      window.scrollTo({ top: 0 });
     } catch (error: any) {
-      console.error("Submission Error Details:", error.response?.data);
-      const backendError = error.response?.data?.detail;
-      message.error(
-        typeof backendError === "string"
-          ? backendError
-          : "Submission failed (500)",
-      );
+      message.error("Submission failed (500)");
     } finally {
       setSubmitting(false);
     }
@@ -164,6 +163,7 @@ function Quiz() {
       head: [["#", "Question", "Your Answer", "Correct Answer", "Explanation"]],
       body: rows || [],
       styles: { fontSize: 7 },
+      headStyles: { fillColor: [79, 70, 229] },
     });
 
     doc.save("quiz_results.pdf");
@@ -171,114 +171,174 @@ function Quiz() {
 
   if (loading)
     return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh]">
-        <Spin size="large" description="AI is preparing your questions..." />
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-[#0d1117] transition-colors duration-300">
+        <Spin size="large" />
+        <Text className="mt-4 text-slate-500! dark:text-slate-400! animate-pulse">
+          AI is preparing your quiz...
+        </Text>
       </div>
     );
 
   if (quizResult) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <Card className="shadow-lg rounded-2xl mb-8 text-center bg-white">
-          <Result
-            status={quizResult.score_percentage >= 50 ? "success" : "warning"}
-            title={`Your Result: ${quizResult.score_percentage}%`}
-            subTitle={`Correct: ${quizResult.correct_answers} / ${quizResult.total_questions}`}
-            extra={[
-              <Button
-                type="primary"
-                key="pdf"
-                icon={<DownloadOutlined />}
-                onClick={downloadPDF}
-                size="large"
-                shape="round"
-              >
-                Download PDF
-              </Button>,
-              <Button
-                key="back"
-                onClick={() => navigate("/")}
-                size="large"
-                shape="round"
-              >
-                Back Home
-              </Button>,
-            ]}
-          />
-        </Card>
+      <div className="min-h-screen bg-slate-50 dark:bg-[#0d1117] py-12 px-4 transition-colors duration-300">
+        <div className="mx-20">
+          <Card className="shadow-2xl rounded-3xl! mb-10 text-center bg-white dark:bg-[#161b22] border-slate-100! dark:border-slate-800!">
+            <Result
+              status={quizResult.score_percentage >= 70 ? "success" : "warning"}
+              title={
+                <span className="text-slate-900! dark:text-white! font-black text-2xl tracking-tight">
+                  Assessment Score: {quizResult.score_percentage}%
+                </span>
+              }
+              subTitle={
+                <span className="text-slate-500! dark:text-slate-400!">
+                  You got {quizResult.correct_answers} out of{" "}
+                  {quizResult.total_questions} questions correct.
+                </span>
+              }
+              extra={[
+                <Button
+                  type="primary"
+                  key="pdf"
+                  icon={<DownloadOutlined />}
+                  onClick={downloadPDF}
+                  size="large"
+                  className="rounded-xl! bg-indigo-600! border-none! shadow-lg shadow-indigo-500/20 hover:scale-105! transition-all"
+                >
+                  Download Report
+                </Button>,
+                <Button
+                  key="back"
+                  onClick={() => navigate("/")}
+                  size="large"
+                  className="rounded-xl! dark:bg-slate-800! dark:text-white! dark:border-slate-700! hover:border-indigo-500!"
+                >
+                  Back Home
+                </Button>,
+              ]}
+            />
+          </Card>
 
-        <div className="space-y-4">
-          {quizResult.review.map((item, idx) => (
-            <Card key={idx} className="rounded-xl border-slate-100 shadow-sm">
-              <Text strong className="block mb-4 text-lg">
-                {idx + 1}. {item.question_text}
-              </Text>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {item.options.map((opt, i) => {
-                  let color = "bg-slate-50 border-slate-100 text-slate-500";
-                  if (i === item.correct_option)
-                    color =
-                      "bg-green-50 border-green-200 text-green-700 font-bold";
-                  if (i === item.selected_option && i !== item.correct_option)
-                    color = "bg-red-50 border-red-200 text-red-700 font-bold";
-                  return (
-                    <div key={i} className={`p-3 rounded-xl border ${color}`}>
-                      {opt}
+          <div className="space-y-6">
+            <Title
+              level={4}
+              className="dark:text-slate-300! px-2 my-4 uppercase tracking-widest text-lg! font-bold"
+            >
+              Question Review
+            </Title>
+            {quizResult.review.map((item, idx) => (
+              <Card
+                key={idx}
+                className="rounded-2xl! border-none shadow-sm dark:bg-[#161b22] overflow-hidden mb-4!"
+              >
+                <div className="flex items-start gap-4 p-2">
+                  <div className="mt-1">
+                    {item.selected_option === item.correct_option ? (
+                      <CheckCircleOutlined className="text-green-500 text-xl" />
+                    ) : (
+                      <CloseCircleOutlined className="text-red-500 text-xl" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <Text
+                      strong
+                      className="block mb-6 text-lg! text-slate-800! dark:text-slate-200! leading-snug"
+                    >
+                      {item.question_text}
+                    </Text>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {item.options.map((opt, i) => {
+                        let containerStyle =
+                          "p-4 rounded-xl border-2 transition-all ";
+                        if (i === item.correct_option)
+                          containerStyle +=
+                            "bg-green-50/50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-700 dark:text-green-400 font-bold";
+                        else if (i === item.selected_option)
+                          containerStyle +=
+                            "bg-red-50/50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400 font-bold";
+                        else
+                          containerStyle +=
+                            "bg-slate-50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-500";
+
+                        return (
+                          <div key={i} className={containerStyle}>
+                            {opt}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
-              <div className="mt-4 p-4 bg-indigo-50 rounded-xl text-xs italic text-indigo-900 leading-relaxed">
-                <strong>Explanation:</strong> {item.explanation}
-              </div>
-            </Card>
-          ))}
+                    <div className="mt-6 p-5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl border-l-4 border-indigo-400">
+                      <Text className="text-lg! text-indigo-900! dark:text-indigo-300! leading-relaxed italic">
+                        <strong className="not-italic uppercase text-lg mr-1 opacity-70">
+                          Explanation:
+                        </strong>
+                        {item.explanation}
+                      </Text>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-12 px-4">
-      <header className="mb-10">
-        <Button
-          icon={<LeftOutlined />}
-          type="text"
-          onClick={() => navigate("/")}
-          className="mb-2"
-        >
-          Cancel
-        </Button>
-        <Title level={2}>
-          {quizType === "quick" ? "Skill Practice" : "Role Assessment"}
-        </Title>
-        <div className="flex gap-2">
+    <div className="mx-auto pt-4 bg-slate-50 dark:bg-[#0d1117] min-h-screen transition-all duration-500">
+      <header className="flex flex-col md:flex-row md:items-end justify-between items-center!">
+        <div>
+          <Button
+            icon={<LeftOutlined />}
+            type="text"
+            onClick={() => navigate("/")}
+            className="mx-20! pl-0! dark:text-slate-400! hover:text-slate-500! transition-colors mb-2 text-lg!"
+          >
+            Exit Quiz
+          </Button>
+          <Title
+            level={2}
+            className="mx-20! font-black! tracking-tight! dark:text-indigo-400!"
+          >
+            {quizType === "quick" ? "Skill Practice" : "Role Assessment"}
+          </Title>
+        </div>
+        <div className="flex gap-2 flex-wrap mx-20">
           {quizType === "quick" ? (
             skills.map((s) => (
-              <Tag color="blue" key={s} className="rounded-full px-3">
+              <Tag
+                color="blue"
+                key={s}
+                className="rounded-full! px-4! py-1! border-none! shadow-sm"
+              >
                 {s}
               </Tag>
             ))
           ) : (
-            <Tag color="purple" className="rounded-full px-4 text-md">
+            <Tag
+              color="purple"
+              className="rounded-full! px-5! py-1! border-none! shadow-sm font-bold tracking-wide uppercase text-[10px]"
+            >
               {role}
             </Tag>
           )}
         </div>
       </header>
 
-      <div className="space-y-8">
+      <div className="mx-20">
         {questions.map((q, idx) => (
           <Card
             key={q.id}
             title={
-              <Text className="text-xs text-slate-400 uppercase tracking-widest">
+              <h2 className="text-xl text-slate-400 uppercase font-extrabold">
                 Question {idx + 1}
-              </Text>
+              </h2>
             }
-            className="rounded-2xl shadow-sm overflow-hidden"
+            className="mb-4! rounded-3xl! shadow-xl dark:shadow-black/20 border-none dark:bg-[#161b22] overflow-hidden"
           >
-            <Paragraph className="text-lg font-semibold text-slate-800 mb-6">
+            <Paragraph className="text-lg! font-bold text-slate-800! dark:text-slate-100!">
               {q.question_text}
             </Paragraph>
             <Radio.Group
@@ -286,14 +346,14 @@ function Quiz() {
               value={selectedAnswers[q.id]}
               className="w-full"
             >
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-4">
                 {q.options.map((opt, i) => (
                   <Radio
                     key={i}
                     value={i}
-                    className={`p-4 border rounded-2xl w-full transition-all ${selectedAnswers[q.id] === i ? "border-indigo-500 bg-indigo-50" : "border-slate-200"}`}
+                    className={`p-5 rounded-2xl! w-full transition-all group`}
                   >
-                    {opt}
+                    <span className="ml-2 text-lg">{opt}</span>
                   </Radio>
                 ))}
               </div>
@@ -302,17 +362,26 @@ function Quiz() {
         ))}
       </div>
 
-      <Button
-        type="primary"
-        size="large"
-        block
-        onClick={handleSubmit}
-        loading={submitting}
-        disabled={Object.keys(selectedAnswers).length < questions.length}
-        className="mt-12 h-16 rounded-2xl bg-indigo-600 font-bold text-lg border-none shadow-xl shadow-indigo-100"
-      >
-        Submit Assessment
-      </Button>
+      <div className="mt-2 bg-linear-to-t from-slate-50 dark:from-[#0d1117] mx-20!">
+        <Button
+          type="primary"
+          size="large"
+          block
+          onClick={handleSubmit}
+          loading={submitting}
+          disabled={Object.keys(selectedAnswers).length < questions.length}
+          className="h-16 rounded-2xl! bg-indigo-600! hover:bg-indigo-700! border-none! font-white! text-lg! tracking-wide! shadow-2xl shadow-indigo-500/40 disabled:bg-slate-200! dark:disabled:bg-slate-800! transition-all hover:scale-[1.01]"
+        >
+          {submitting ? "Processing..." : "Submit Final Assessment"}
+        </Button>
+        {Object.keys(selectedAnswers).length < questions.length && (
+          <div className="text-center mt-3 animate-bounce">
+            <Text className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">
+              Answer all questions to unlock submission
+            </Text>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

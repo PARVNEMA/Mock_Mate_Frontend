@@ -1,1 +1,228 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+/* ── Global base ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Light mode */
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+/* Dark mode body */
+.dark body {
+  background-color: #0d1117;
+  color: #e2e8f0;
+}
+
+/* Smooth theme transitions for all elements */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+/* ── Ant Design dark mode overrides ── */
+.dark .ant-card {
+  background-color: #161b22 !important;
+  border-color: #30363d !important;
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-card-head {
+  background-color: #161b22 !important;
+  border-bottom-color: #30363d !important;
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-card-body {
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-typography,
+.dark .ant-typography h1,
+.dark .ant-typography h2,
+.dark .ant-typography h3,
+.dark .ant-typography h4,
+.dark .ant-typography h5 {
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-typography.ant-typography-secondary {
+  color: #94a3b8 !important;
+}
+
+.dark .ant-input,
+.dark .ant-input-affix-wrapper,
+.dark .ant-input-number,
+.dark .ant-input-password {
+  background-color: #1c2333 !important;
+  border-color: #30363d !important;
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-input::placeholder,
+.dark .ant-input-affix-wrapper input::placeholder {
+  color: #64748b !important;
+}
+
+.dark .ant-input:hover,
+.dark .ant-input-affix-wrapper:hover {
+  border-color: #6366f1 !important;
+}
+
+.dark .ant-input:focus,
+.dark .ant-input-affix-wrapper:focus,
+.dark .ant-input-affix-wrapper-focused {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2) !important;
+}
+
+.dark .ant-input-number-input {
+  background-color: #1c2333 !important;
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-select-selector {
+  background-color: #1c2333 !important;
+  border-color: #30363d !important;
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-select-arrow {
+  color: #64748b !important;
+}
+
+.dark .ant-select-dropdown {
+  background-color: #1c2333 !important;
+  border-color: #30363d !important;
+}
+
+.dark .ant-select-item {
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-select-item-option-active,
+.dark .ant-select-item-option-selected {
+  background-color: #1e2a3a !important;
+  color: #818cf8 !important;
+}
+
+.dark .ant-form-item-label > label {
+  color: #94a3b8 !important;
+}
+
+.dark .ant-radio-wrapper {
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-tabs-tab {
+  color: #64748b !important;
+}
+
+.dark .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #818cf8 !important;
+}
+
+.dark .ant-tabs-ink-bar {
+  background-color: #818cf8 !important;
+}
+
+.dark .ant-tabs-nav::before {
+  border-bottom-color: #30363d !important;
+}
+
+.dark .ant-tag {
+  background-color: #1e2a3a !important;
+  border-color: #30363d !important;
+  color: #818cf8 !important;
+}
+
+.dark .ant-btn-default {
+  background-color: #1c2333 !important;
+  border-color: #30363d !important;
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-btn-default:hover {
+  background-color: #1e2a3a !important;
+  border-color: #6366f1 !important;
+  color: #818cf8 !important;
+}
+
+.dark .ant-upload-drag {
+  background-color: #1c2333 !important;
+  border-color: #30363d !important;
+}
+
+.dark .ant-upload-drag:hover {
+  border-color: #6366f1 !important;
+}
+
+.dark .ant-upload-text,
+.dark .ant-upload-hint {
+  color: #94a3b8 !important;
+}
+
+.dark .ant-upload-drag-icon .anticon {
+  color: #6366f1 !important;
+}
+
+.dark .ant-divider {
+  border-color: #30363d !important;
+}
+
+.dark .ant-dropdown-menu {
+  background-color: #1c2333 !important;
+  border-color: #30363d !important;
+}
+
+.dark .ant-dropdown-menu-item {
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-dropdown-menu-item:hover {
+  background-color: #1e2a3a !important;
+}
+
+.dark .ant-dropdown-menu-item-disabled {
+  color: #64748b !important;
+}
+
+.dark .ant-spin-dot-item {
+  background-color: #6366f1 !important;
+}
+
+.dark .ant-result-title {
+  color: #e2e8f0 !important;
+}
+
+.dark .ant-result-subtitle {
+  color: #94a3b8 !important;
+}

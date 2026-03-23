@@ -1,16 +1,18 @@
-import { useEffect, useState } from "react";
-import { Tabs, Input, Button, Typography, Tag } from "antd";
+﻿import { useEffect, useState } from "react";
+import { Tabs, Input, Button, Typography, Tag, InputNumber } from "antd";
 import {
   BookOutlined,
   UserOutlined,
   BulbOutlined,
   StarOutlined,
   PlusOutlined,
+  RocketOutlined,
+  CloseOutlined,
 } from "@ant-design/icons";
 import { useLoaderData, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 interface Skill {
   id: string;
@@ -20,9 +22,12 @@ interface Skill {
 
 const QuizSelector = () => {
   const [skills, setSkills] = useState<string[]>([]);
-  const [presetSkills, setPresetSkills] = useState<Skill[]>(useLoaderData());
+  const [presetSkills, setPresetSkills] = useState<Skill[]>(
+    useLoaderData() as Skill[],
+  );
   const [skillInput, setSkillInput] = useState("");
   const [customRole, setCustomRole] = useState("");
+  const [questionCount, setQuestionCount] = useState(10);
   const navigate = useNavigate();
 
   const getAuthHeaders = () => ({
@@ -59,50 +64,49 @@ const QuizSelector = () => {
     }
   };
 
-  // ✅ Navigate with "quick" type and empty job_description
   const skillQuiz = () => {
     navigate("/quiz", {
-      state: {
-        skills,
-        role: "",
-        type: "quick",
-      },
+      state: { skills, role: "", type: "quick", questionCount },
     });
   };
 
-  // ✅ Navigate with "job-role" type and empty skills list
   const roleQuiz = () => {
     navigate("/quiz", {
-      state: {
-        skills: [],
-        role: customRole,
-        type: "job-role",
-      },
+      state: { skills: [], role: customRole, type: "job-role", questionCount },
     });
   };
+
+  // Shared Tailwind styles
+  const cardBase =
+    "p-8 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-xl dark:shadow-black/40 flex flex-col justify-between transition-all duration-500";
 
   const items = [
     {
       label: (
-        <span className="flex items-center px-4 py-2">
+        <span className="flex items-center px-6 py-2 text-xs font-black uppercase tracking-widest">
           <BulbOutlined className="mr-2" /> Specific Topics
         </span>
       ),
       key: "1",
       children: (
-        <div className="p-8 bg-white rounded-2xl border border-slate-100 shadow-sm min-h-75 flex flex-col justify-between">
+        <div className={cardBase}>
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-amber-50 rounded-lg">
-                <StarOutlined className="text-amber-500" />
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-amber-50 dark:bg-amber-500/10 rounded-2xl">
+                <StarOutlined className="text-xl text-amber-500" />
               </div>
-              <Title level={5} className="m-0!">
-                Custom Skillset
-              </Title>
+              <div>
+                <Title
+                  level={4}
+                  className="m-0! font-black! tracking-tight! dark:text-white!"
+                >
+                  Add topics to start the quiz
+                </Title>
+              </div>
             </div>
 
-            <div className="mb-6">
-              <Text className="text-slate-400 text-xs font-semibold uppercase tracking-wider block mb-3">
+            <div className="mb-4">
+              <Text className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase block mb-4">
                 Quick Add Popular Topics:
               </Text>
               <div className="flex flex-wrap gap-2">
@@ -111,11 +115,11 @@ const QuizSelector = () => {
                     key={preset.id}
                     onClick={() => handleAddSkill(preset.name)}
                     disabled={skills.includes(preset.name)}
-                    className={`px-3 py-1 rounded-md text-xs font-medium border transition-all flex items-center gap-1
+                    className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 uppercase!
                       ${
                         skills.includes(preset.name)
-                          ? "bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed"
-                          : "bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600"
+                          ? "bg-slate-100 dark:bg-slate-800 text-slate-400 border-transparent cursor-not-allowed"
+                          : "bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 active:scale-95"
                       }`}
                   >
                     <PlusOutlined className="text-[10px]" /> {preset.name}
@@ -124,28 +128,49 @@ const QuizSelector = () => {
               </div>
             </div>
 
-            <Input
-              placeholder="Or type a custom topic and press Enter..."
-              value={skillInput}
-              onChange={(e) => setSkillInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="h-12 rounded-xl border-slate-200 mb-6 shadow-sm"
-              prefix={<BookOutlined className="text-slate-400 mr-2" />}
-            />
+            <div className="flex">
+              <Input
+                placeholder="Or type a custom topic and press Enter..."
+                value={skillInput}
+                onChange={(e) => setSkillInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="h-12 text-9xl"
+                prefix={<BookOutlined className="text-slate-400 mr-2" />}
+              />
+              <label className="text-white ml-28 text-start mr-4 font-bold">
+                Question Count
+              </label>
+              <InputNumber
+                min={1}
+                max={30}
+                value={questionCount}
+                className="w-28!"
+                onChange={(value) => setQuestionCount(value ?? 10)}
+              />
+            </div>
 
-            <div className="flex flex-wrap gap-2 min-h-8">
-              {skills.map((skill) => (
-                <Tag
-                  key={skill}
-                  closable
-                  onClose={() =>
-                    setSkills((prev) => prev.filter((s) => s !== skill))
-                  }
-                  className="px-4 py-1.5 rounded-full bg-indigo-50 text-indigo-600 border-indigo-100 text-sm font-medium"
-                >
-                  {skill}
-                </Tag>
-              ))}
+            <div className="flex flex-wrap gap-2 mt-4 min-h-12 items-start">
+              {skills.length > 0 ? (
+                skills.map((skill) => (
+                  <Tag
+                    key={skill}
+                    closable
+                    closeIcon={
+                      <CloseOutlined className="text-red-500! text-xs! ml-1!" />
+                    }
+                    onClose={() =>
+                      setSkills((prev) => prev.filter((s) => s !== skill))
+                    }
+                    className="px-3! py-2! rounded-full bg-indigo-50! dark:bg-indigo-500/10! text-indigo-600! dark:text-indigo-400! border-none! text-xs! font-bold! uppercase! animate-in zoom-in duration-300"
+                  >
+                    {skill}
+                  </Tag>
+                ))
+              ) : (
+                <Text className="text-slate-400 dark:text-slate-600 italic text-sm ml-1">
+                  No topics yet...
+                </Text>
+              )}
             </div>
           </div>
 
@@ -154,7 +179,8 @@ const QuizSelector = () => {
             size="large"
             block
             disabled={skills.length === 0}
-            className="h-12 bg-indigo-600 rounded-xl mt-8 font-semibold shadow-lg border-none"
+            icon={<RocketOutlined />}
+            className="h-14 rounded-2xl! bg-indigo-400! hover:bg-indigo-600! border-none! text-white! disabled:hover:text-gray-500! tracking-wide! shadow-xl shadow-indigo-500/20 active:scale-95 transition-all mt-2!"
             onClick={skillQuiz}
           >
             Generate Skill Quiz
@@ -164,40 +190,63 @@ const QuizSelector = () => {
     },
     {
       label: (
-        <span className="flex items-center px-4 py-2">
+        <span className="flex items-center px-6 py-2 text-xs font-black uppercase tracking-widest">
           <UserOutlined className="mr-2" /> Job Role
         </span>
       ),
       key: "2",
       children: (
-        <div className="p-8 bg-white rounded-2xl border border-slate-100 shadow-sm min-h-75 flex flex-col justify-between">
+        <div className={cardBase}>
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-indigo-50 rounded-lg">
-                <UserOutlined className="text-indigo-600" />
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-2xl">
+                <UserOutlined className="text-xl text-indigo-600 dark:text-indigo-400" />
               </div>
-              <Title level={5} className="m-0!">
-                Role-Based Assessment
-              </Title>
+              <div>
+                <Title
+                  level={4}
+                  className="m-0! font-black! tracking-tight! dark:text-white!"
+                >
+                  Role-Based Assessment
+                </Title>
+                <Text className="text-xs! text-slate-400! font-bold! uppercase! tracking-widest!"></Text>
+              </div>
             </div>
-            <Text className="text-slate-500 mb-4 block">
-              Specify the exact position. AI will simulate a technical round.
-            </Text>
-            <Input
-              placeholder="e.g. Junior MERN Developer..."
-              value={customRole}
-              onChange={(e) => setCustomRole(e.target.value)}
-              className="h-12 rounded-xl border-slate-200 shadow-sm"
-              prefix={<StarOutlined className="text-indigo-400 mr-2" />}
-            />
+
+            <Paragraph className="text-slate-500 dark:text-slate-400 mb-8 text-base! leading-relaxed!">
+              Enter the specific job title you're preparing for. Our AI will
+              curate questions that will help you.
+            </Paragraph>
+
+            <div className="flex">
+              <Input
+                placeholder="e.g. MERN Stack Developer..."
+                value={customRole}
+                onChange={(e) => setCustomRole(e.target.value)}
+                className="h-12 text-9xl mb-4"
+                prefix={<StarOutlined className="text-indigo-400 mr-2" />}
+              />
+              <label className="text-white ml-28 text-start mr-4 font-bold">
+                Question Count
+              </label>
+              <InputNumber
+                min={1}
+                max={30}
+                value={questionCount}
+                className="w-28! h-12"
+                onChange={(value) => setQuestionCount(value ?? 10)}
+              />
+            </div>
           </div>
+
           <Button
             disabled={!customRole}
             type="primary"
             size="large"
             block
+            icon={<RocketOutlined />}
             onClick={roleQuiz}
-            className="h-12 bg-indigo-600 rounded-xl mt-8 font-semibold shadow-lg border-none"
+            className="h-14 rounded-2xl! bg-indigo-400! hover:bg-indigo-600! border-none! text-white! disabled:hover:text-gray-500! tracking-wide! shadow-xl shadow-indigo-500/20 active:scale-95 transition-all mt-2!"
           >
             Start Role Interview
           </Button>
@@ -207,16 +256,30 @@ const QuizSelector = () => {
   ];
 
   return (
-    <div className="max-w-2xl mx-auto mt-16 px-4">
-      <div className="text-center mb-10">
-        <h1 className="text-3xl font-extrabold text-slate-900 mb-2">
-          Quiz Setup
-        </h1>
-        <p className="text-slate-500 text-lg">
-          Select your focus area and let AI handle the rest.
-        </p>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 px-4 py-4 transition-colors duration-500 relative overflow-hidden">
+      {/* Dynamic Ambience */}
+      <div className="absolute top-0 right-0 w-150 h-150 bg-indigo-500/5 blur-[120px] pointer-events-none" />
+      <div className="max-w-3xl mx-auto relative">
+        <div className="text-center">
+          <Title
+            level={1}
+            className="text-5xl! font-black! tracking-tighter! text-slate-900! dark:text-white! mb-4"
+          >
+            Quiz Setup
+          </Title>
+          <Text className="text-lg! text-slate-500 dark:text-slate-400 max-w-lg mx-auto block">
+            Select your preferred assessment mode and let our AI models tailor
+            the experience for you.
+          </Text>
+        </div>
+
+        <Tabs
+          defaultActiveKey="1"
+          centered
+          items={items}
+          className="quiz-tabs-custom"
+        />
       </div>
-      <Tabs defaultActiveKey="1" centered items={items} />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import {
   Button,
   Card,
@@ -10,9 +10,15 @@ import {
   Select,
   Typography,
   Upload,
+  Divider,
 } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
-import { InboxOutlined } from "@ant-design/icons";
+import {
+  InboxOutlined,
+  RocketOutlined,
+  SettingOutlined,
+  FilePdfOutlined,
+} from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { startInterview } from "../services/interviewApi";
 import type { InterviewType, LLMMode, LLMProvider } from "../types/interview";
@@ -38,30 +44,25 @@ const DEFAULTS: SetupFormValues = {
 };
 
 const isPdfFile = (file: File): boolean => {
-  const byType = file.type === "application/pdf";
-  const byName = file.name.toLowerCase().endsWith(".pdf");
-  return byType || byName;
+  return (
+    file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+  );
 };
 
 const getErrorText = (err: unknown): string => {
   if (typeof err === "string") return err;
-  if (!err || typeof err !== "object") return "Unknown error";
-  const e = err as { message?: unknown; response?: unknown };
-  const messageText = typeof e.message === "string" ? e.message : "";
-  const response = e.response as
-    | { data?: { detail?: unknown; message?: unknown } }
-    | undefined;
-  const detail = response?.data?.detail;
-  const apiMessage = response?.data?.message;
-  if (typeof detail === "string") return detail;
-  if (typeof apiMessage === "string") return apiMessage;
-  return messageText || "Unknown error";
+  const e = err as any;
+  return (
+    e.response?.data?.detail ||
+    e.response?.data?.message ||
+    e.message ||
+    "Unknown error"
+  );
 };
 
 function InterviewSetup() {
   const navigate = useNavigate();
   const [form] = Form.useForm<SetupFormValues>();
-
   const [resumeFileList, setResumeFileList] = useState<UploadFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -72,32 +73,15 @@ function InterviewSetup() {
 
   const onSubmit = async (values: SetupFormValues) => {
     if (!accessToken) {
-      message.error("Please sign in before starting an interview.");
+      message.error("Please sign in before starting.");
       navigate("/signin");
       return;
     }
 
     const resume = resumeFileList[0]?.originFileObj as File | undefined;
-    if (!resume) {
-      message.error("Please upload your resume PDF.");
+    if (!resume || !isPdfFile(resume)) {
+      message.error("Please upload a valid PDF resume.");
       return;
-    }
-    if (!isPdfFile(resume)) {
-      message.error("Resume must be a PDF file.");
-      return;
-    }
-
-    // Enforce backend validation rules client-side to provide immediate feedback.
-    if (values.llm_mode === "project_gemini_key") {
-      if (values.llm_provider !== "gemini") {
-        message.error("Project key mode only supports Gemini.");
-        return;
-      }
-    } else {
-      if (!values.api_key?.trim()) {
-        message.error("Please enter your API key for BYOK mode.");
-        return;
-      }
     }
 
     setSubmitting(true);
@@ -105,221 +89,218 @@ function InterviewSetup() {
       const formData = new FormData();
       formData.append("resume_file", resume);
       formData.append("job_role", values.job_role.trim());
-      formData.append("max_questions", String(values.max_questions ?? 8));
+      formData.append("max_questions", String(values.max_questions));
       formData.append("llm_mode", values.llm_mode);
       formData.append("llm_provider", values.llm_provider);
       formData.append("interview_type", values.interview_type);
 
-      // Only send api_key when the backend expects it.
       if (values.llm_mode === "own_api_key") {
         formData.append("api_key", values.api_key?.trim() || "");
       }
 
       const started = await startInterview({ formData, accessToken });
-
-      // Never persist keys; clear input state after the request completes.
       form.setFieldValue("api_key", "");
-
       navigate(`/interview/${started.session_id}`, {
         state: { firstQuestion: started.first_question },
       });
     } catch (err: unknown) {
-      message.error(getErrorText(err) || "Failed to start interview.");
+      message.error(getErrorText(err));
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Shared Tailwind styles
+  const inputBase =
+    "rounded-xl! h-11! border-slate-200! dark:border-slate-700! bg-white! dark:bg-slate-800/50! text-slate-900! dark:text-slate-100! placeholder:text-slate-400! dark:placeholder:text-slate-500! hover:border-indigo-500! transition-all";
+  const labelText =
+    "text-slate-600 dark:text-slate-400 font-bold text-[14px] uppercase tracking-wider ml-1";
+
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-10">
-      <div className="max-w-3xl mx-auto">
-        <header className="mb-8">
-          <Title level={2} className="m-0! tracking-tight">
-            Start an AI Interview
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 px-4 py-4 transition-colors duration-500 relative">
+      <div className="absolute top-0 right-0 w-full h-64 bg-linear-to-b from-indigo-500/5 to-transparent pointer-events-none" />
+
+      <div className="max-w-3xl mx-auto relative">
+        <header className="mb-6 text-center md:text-left">
+          <Title
+            level={2}
+            className="m-0! font-black! tracking-tight! text-slate-900! dark:text-white!"
+          >
+            Interview Setup
           </Title>
-          <Text className="text-slate-500">
-            Upload your resume and choose how the interviewer should run the
-            session.
+          <Text className="text-slate-500 dark:text-slate-400 block mt-2 text-lg">
+            Configure your AI interview session below.
           </Text>
         </header>
 
-        <Card className="rounded-2xl shadow-sm border border-slate-100">
+        <Card className="rounded-3xl! shadow-xl dark:shadow-black/40 border-none dark:bg-slate-900 overflow-hidden">
           <Form<SetupFormValues>
             form={form}
             layout="vertical"
             requiredMark={false}
             initialValues={DEFAULTS}
             onFinish={onSubmit}
+            className="p-2"
           >
-            <Form.Item
-              label={<span className="text-slate-700 font-medium">Resume</span>}
-              required
-            >
+            {/* 1. Resume Upload Section */}
+            <div className="mb-8">
+              <div className="flex items-center gap-2 mb-4 ml-1">
+                <FilePdfOutlined className="text-white!" />
+                <span className={labelText}>Resume</span>
+              </div>
               <Upload.Dragger
-                accept=".pdf,application/pdf"
+                accept=".pdf"
                 multiple={false}
                 fileList={resumeFileList}
                 beforeUpload={() => false}
-                onChange={(info) => {
-                  // Keep only the latest file to match backend expectation.
-                  setResumeFileList(info.fileList.slice(-1));
-                }}
-                onRemove={() => {
-                  setResumeFileList([]);
-                }}
+                onChange={(info) => setResumeFileList(info.fileList.slice(-1))}
+                onRemove={() => setResumeFileList([])}
+                className="bg-slate-50! dark:bg-slate-800/30!  dark:border-slate-700! hover:border-indigo-400! transition-all rounded-2xl!"
               >
-                <p className="ant-upload-drag-icon">
-                  <InboxOutlined />
+                <p className="ant-upload-drag-icon mb-2!">
+                  <InboxOutlined className="text-indigo-500" />
                 </p>
-                <p className="ant-upload-text">
-                  Click or drag a PDF resume here
+                <p className="ant-upload-text dark:text-slate-300! font-semibold">
+                  Drop your resume here in pdf format
                 </p>
-                <p className="ant-upload-hint">
-                  Your resume is uploaded for parsing and interview generation.
+                <p className="ant-upload-hint dark:text-slate-500! text-xs">
+                  AI will analyze this file to generate tailored questions.
                 </p>
               </Upload.Dragger>
-            </Form.Item>
+            </div>
 
-            <Form.Item
-              name="job_role"
-              label={
-                <span className="text-slate-700 font-medium">Job Role</span>
-              }
-              rules={[
-                { required: true, message: "Please enter a job role." },
-                { min: 2, max: 120, message: "Job role must be 2-120 chars." },
-              ]}
-            >
-              <Input
-                placeholder="e.g. Frontend Developer (React)"
-                className="h-11 rounded-xl"
-              />
-            </Form.Item>
+            <Divider className="border-slate-100! dark:border-slate-800!" />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 2. Job Info Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               <Form.Item
-                name="max_questions"
-                label={
-                  <span className="text-slate-700 font-medium">
-                    Max Questions
-                  </span>
-                }
-                rules={[{ required: true, message: "Enter max questions." }]}
+                name="job_role"
+                label={<span className={labelText}>Target Job Role</span>}
+                className="md:col-span-8"
+                rules={[{ required: true, message: "Please enter a job role" }]}
               >
-                <InputNumber
-                  min={1}
-                  max={30}
-                  className="w-full h-11"
+                <Input
+                  placeholder="e.g. Senior MERN Stack Developer"
+                  className={inputBase}
                 />
               </Form.Item>
 
               <Form.Item
-                name="interview_type"
-                label={
-                  <span className="text-slate-700 font-medium">
-                    Interview Type
-                  </span>
-                }
-                rules={[{ required: true, message: "Select interview type." }]}
+                name="max_questions"
+                label={<span className={labelText}>Question Count</span>}
+                className="md:col-span-4"
+                rules={[{ required: true, message: "Required" }]}
               >
-                <Select
-                  options={[
-                    { value: "TR", label: "Technical (TR)" },
-                    { value: "HR", label: "HR / Behavioral (HR)" },
-                    { value: "MR", label: "Managerial (MR)" },
-                    { value: "MIXED", label: "Mixed (MIXED)" },
-                  ]}
+                <InputNumber
+                  min={1}
+                  max={30}
+                  className={`${inputBase} w-full! flex! items-center!`}
                 />
               </Form.Item>
             </div>
 
             <Form.Item
-              name="llm_mode"
-              label={
-                <span className="text-slate-700 font-medium">LLM Mode</span>
-              }
+              name="interview_type"
+              label={<span className={labelText}>Session Focus</span>}
+              rules={[{ required: true }]}
             >
-              <Radio.Group
-                onChange={(e) => {
-                  const nextMode = e.target.value as LLMMode;
-                  if (nextMode === "project_gemini_key") {
-                    // Backend requires provider=gemini and forbids api_key in project mode.
-                    form.setFieldValue("llm_provider", "gemini");
-                    form.setFieldValue("api_key", "");
-                  }
-                }}
-              >
-                <Radio value="project_gemini_key">Use project Gemini key</Radio>
-                <Radio value="own_api_key">Use my own API key (BYOK)</Radio>
-              </Radio.Group>
+              <Select
+                className="rounded-xl! h-11 text-white! dark:bg-slate-800!"
+                popupClassName="dark:bg-slate-800! text-white!"
+                options={[
+                  { value: "TR", label: "Technical Round (TR)" },
+                  { value: "HR", label: "Behavioral / HR Round" },
+                  { value: "MR", label: "Managerial Round" },
+                  { value: "MIXED", label: "Comprehensive (Mixed)" },
+                ]}
+              />
             </Form.Item>
 
-            <Form.Item shouldUpdate noStyle>
-              {() => {
-                const mode = form.getFieldValue("llm_mode") as LLMMode;
-                const providerDisabled = mode === "project_gemini_key";
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Form.Item
-                      name="llm_provider"
-                      label={
-                        <span className="text-slate-700 font-medium">
-                          Provider
-                        </span>
-                      }
-                      rules={[
-                        { required: true, message: "Select an LLM provider." },
-                      ]}
-                    >
-                      <Select
-                        disabled={providerDisabled}
-                        options={[
-                          { value: "gemini", label: "Gemini" },
-                          { value: "openai", label: "OpenAI" },
-                          { value: "anthropic", label: "Anthropic" },
-                        ]}
-                      />
-                    </Form.Item>
-
-                    <Form.Item
-                      name="api_key"
-                      label={
-                        <span className="text-slate-700 font-medium">
-                          API Key
-                        </span>
-                      }
-                      rules={
-                        mode === "own_api_key"
-                          ? [{ required: true, message: "API key is required." }]
-                          : []
-                      }
-                    >
-                      <Input.Password
-                        disabled={mode !== "own_api_key"}
-                        placeholder={
-                          mode === "own_api_key"
-                            ? "Paste your API key (used for this session only)"
-                            : "Not required for project key mode"
-                        }
-                        className="h-11 rounded-xl"
-                      />
-                    </Form.Item>
+            {/* 3. LLM Configuration Section */}
+            <div className="flex items-center gap-1 mb-4 ml-1">
+              <SettingOutlined className="text-white! mr-2" />
+              <span className={labelText}>Engine Configuration</span>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <Form.Item name="llm_mode">
+                <Radio.Group
+                  className="w-full"
+                  onChange={(e) => {
+                    if (e.target.value === "project_gemini_key") {
+                      form.setFieldsValue({
+                        llm_provider: "gemini",
+                        api_key: "",
+                      });
+                    }
+                  }}
+                >
+                  <div className="flex flex-col gap-4 m-6 mb-0">
+                    <Radio value="project_gemini_key" className="w-full">
+                      <span className="dark:text-slate-300">
+                        System Gemini Key
+                      </span>
+                    </Radio>
+                    <Radio value="own_api_key" className="w-full">
+                      <span className="dark:text-slate-300">
+                        Personal API Key
+                      </span>
+                    </Radio>
                   </div>
-                );
-              }}
-            </Form.Item>
+                </Radio.Group>
+              </Form.Item>
 
-            <div className="flex gap-3 mt-2">
-              <Button onClick={() => navigate("/")} className="rounded-xl">
-                Cancel
-              </Button>
+              <Form.Item shouldUpdate noStyle>
+                {() => {
+                  const mode = form.getFieldValue("llm_mode");
+                  const isBYOK = mode === "own_api_key";
+
+                  if (!isBYOK) return null;
+
+                  return (
+                    <div className="m-4 grid grid-cols-1 md:grid-cols-2 gap-4 transition-all duration-300">
+                      <Form.Item
+                        name="llm_provider"
+                        label={<span className={labelText}>AI Provider</span>}
+                        rules={[{ required: true }]}
+                      >
+                        <Select
+                          className="h-11 bg-slate-600 rounded-xl border-slate-200"
+                          popupClassName="dark:bg-slate-800! text-white!"
+                          options={[
+                            { value: "gemini", label: "Google Gemini" },
+                            { value: "openai", label: "OpenAI GPT" },
+                            { value: "anthropic", label: "Anthropic Claude" },
+                          ]}
+                        />
+                      </Form.Item>
+
+                      <Form.Item
+                        name="api_key"
+                        label={
+                          <span className={labelText}>Provider API Key</span>
+                        }
+                        rules={[{ required: true, message: "Key required" }]}
+                      >
+                        <Input.Password
+                          placeholder="Enter key..."
+                          className={`${inputBase}`}
+                        />
+                      </Form.Item>
+                    </div>
+                  );
+                }}
+              </Form.Item>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4 mt-10">
               <Button
                 type="primary"
                 htmlType="submit"
                 loading={submitting}
-                className="rounded-xl bg-indigo-600 border-none"
+                icon={<RocketOutlined />}
+                className="h-14 rounded-2xl! flex-2 bg-indigo-600! border-none! font-black! text-lg! shadow-xl shadow-indigo-500/20 active:scale-[0.98] transition-all"
               >
-                Start Interview
+                Launch Interview
               </Button>
             </div>
           </Form>

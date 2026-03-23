@@ -1,10 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment, OrbitControls } from "@react-three/drei";
-import { Button, Card, Input, message, Spin, Tag, Typography } from "antd";
-import { AudioOutlined, SendOutlined, StopOutlined } from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Input,
+  message,
+  Spin,
+  Tag,
+  Typography,
+  Divider,
+  Space,
+} from "antd";
+import {
+  AudioOutlined,
+  SendOutlined,
+  StopOutlined,
+  RobotOutlined,
+  UserOutlined,
+  CheckCircleOutlined,
+} from "@ant-design/icons";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+import SpeechRecognition, {
+  useSpeechRecognition,
+} from "react-speech-recognition";
 import { Avatar } from "../components/Avatar";
 import { synthesizeSarvamSpeech } from "../services/sarvamTts";
 import { useInterviewSocket } from "../hooks/useInterviewSocket";
@@ -13,10 +32,7 @@ import {
   type VisemeCue,
   type VisemeName,
 } from "../utils/lipsync";
-import {
-  finishInterview,
-  getInterviewSession,
-} from "../services/interviewApi";
+import { finishInterview, getInterviewSession } from "../services/interviewApi";
 import type {
   InterviewEvaluation,
   InterviewQuestion,
@@ -28,13 +44,13 @@ import type {
 
 const { Title, Text, Paragraph } = Typography;
 
+// --- Helper Utilities ---
 const toWsUrl = (httpBaseUrl: string): string => {
-  const trimmed = String(httpBaseUrl || "").trim().replace(/\/$/, "");
+  const trimmed = String(httpBaseUrl || "")
+    .trim()
+    .replace(/\/$/, "");
   if (!trimmed) return "";
-  if (trimmed.startsWith("https://")) return trimmed.replace("https://", "wss://");
-  if (trimmed.startsWith("http://")) return trimmed.replace("http://", "ws://");
-  // If someone passes ws:// already, keep it.
-  return trimmed;
+  return trimmed.replace(/^http/, "ws");
 };
 
 const nowIso = () => new Date().toISOString();
@@ -43,25 +59,6 @@ const asStringArray = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.map((v) => String(v));
   if (typeof value === "string") return [value];
   return [];
-};
-
-const getErrorText = (err: unknown): string => {
-  if (typeof err === "string") return err;
-  if (!err || typeof err !== "object") return "Unknown error";
-  const e = err as { message?: unknown; response?: unknown };
-  const messageText = typeof e.message === "string" ? e.message : "";
-  const response = e.response as
-    | { data?: { detail?: unknown; message?: unknown } }
-    | undefined;
-  const detail = response?.data?.detail;
-  const apiMessage = response?.data?.message;
-  if (typeof detail === "string") return detail;
-  if (typeof apiMessage === "string") return apiMessage;
-  return messageText || "Unknown error";
-};
-
-type InterviewRoomNavState = {
-  firstQuestion?: InterviewQuestion;
 };
 
 function InterviewRoom() {
@@ -74,18 +71,25 @@ function InterviewRoom() {
     [],
   );
 
-  const [sessionMeta, setSessionMeta] = useState<InterviewSessionOut | null>(null);
+  const [sessionMeta, setSessionMeta] = useState<InterviewSessionOut | null>(
+    null,
+  );
   const [loadingMeta, setLoadingMeta] = useState(true);
 
-  const navState = (location.state ?? null) as InterviewRoomNavState | null;
-  const initialQuestion = navState?.firstQuestion;
-  const [question, setQuestion] = useState<InterviewQuestion | null>(initialQuestion ?? null);
-  const [evaluation, setEvaluation] = useState<InterviewEvaluation | null>(null);
+  const navState = (location.state ?? null) as {
+    firstQuestion?: InterviewQuestion;
+  } | null;
+  const [question, setQuestion] = useState<InterviewQuestion | null>(
+    navState?.firstQuestion ?? null,
+  );
+  const [evaluation, setEvaluation] = useState<InterviewEvaluation | null>(
+    null,
+  );
   const [report, setReport] = useState<InterviewReport | null>(null);
   const [autoSpeak, setAutoSpeak] = useState(true);
-
   const [typedAnswer, setTypedAnswer] = useState("");
 
+  // --- Avatar & Audio States ---
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [activeViseme, setActiveViseme] = useState<VisemeName>("viseme_sil");
 
@@ -96,6 +100,7 @@ function InterviewRoom() {
   const cueIndexRef = useRef(0);
   const lastVisemeRef = useRef<VisemeName>("viseme_sil");
 
+  // --- Handlers ---
   const stopVisemeLoop = useCallback(() => {
     if (visemeRafRef.current !== null) {
       cancelAnimationFrame(visemeRafRef.current);
@@ -111,170 +116,102 @@ function InterviewRoom() {
     setActiveViseme("viseme_sil");
   }, [stopVisemeLoop]);
 
-  const revokeAudioUrl = useCallback(() => {
-    if (!audioObjectUrlRef.current) return;
-    URL.revokeObjectURL(audioObjectUrlRef.current);
-    audioObjectUrlRef.current = null;
-  }, []);
-
   const stopSpeaking = useCallback(() => {
-    const audio = audioRef.current;
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
     }
     setIsSpeaking(false);
     resetVisemes();
   }, [resetVisemes]);
 
-  const startVisemeLoopFromAudio = useCallback((audio: HTMLAudioElement) => {
-    stopVisemeLoop();
-    cueIndexRef.current = 0;
-    lastVisemeRef.current = "viseme_sil";
-
-    const loop = () => {
-      const track = visemeTrackRef.current;
-      const t = audio.currentTime;
-      while (cueIndexRef.current < track.length && t >= track[cueIndexRef.current].end) {
-        cueIndexRef.current += 1;
-      }
-      const cue = track[cueIndexRef.current];
-      const nextViseme: VisemeName = cue ? cue.viseme : "viseme_sil";
-      if (lastVisemeRef.current !== nextViseme) {
-        lastVisemeRef.current = nextViseme;
-        setActiveViseme(nextViseme);
-      }
-      visemeRafRef.current = requestAnimationFrame(loop);
-    };
-
-    visemeRafRef.current = requestAnimationFrame(loop);
-  }, [stopVisemeLoop]);
-
   const speakQuestion = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-
       stopSpeaking();
       setIsSpeaking(true);
 
-      // Sarvam TTS via backend only.
-      // Note: We intentionally do not fall back to browser `speechSynthesis` because that can
-      // result in double audio (Sarvam + browser) depending on autoplay/permission behavior.
       try {
         const blob = await synthesizeSarvamSpeech({ text: trimmed });
-        revokeAudioUrl();
         const url = URL.createObjectURL(blob);
         audioObjectUrlRef.current = url;
-
         const audio = audioRef.current ?? new Audio();
         audioRef.current = audio;
         audio.src = url;
 
         audio.onloadedmetadata = () => {
-          // Sarvam endpoint doesn't provide word boundaries here, so we approximate visemes
-          // from the transcript and the final audio duration.
-          visemeTrackRef.current = createVisemeTrackFromTranscript(trimmed, audio.duration);
-          startVisemeLoopFromAudio(audio);
+          visemeTrackRef.current = createVisemeTrackFromTranscript(
+            trimmed,
+            audio.duration,
+          );
+          const loop = () => {
+            const t = audio.currentTime;
+            while (
+              cueIndexRef.current < visemeTrackRef.current.length &&
+              t >= visemeTrackRef.current[cueIndexRef.current].end
+            ) {
+              cueIndexRef.current += 1;
+            }
+            const cue = visemeTrackRef.current[cueIndexRef.current];
+            const nextV = cue ? cue.viseme : "viseme_sil";
+            if (lastVisemeRef.current !== nextV) {
+              lastVisemeRef.current = nextV;
+              setActiveViseme(nextV);
+            }
+            visemeRafRef.current = requestAnimationFrame(loop);
+          };
+          visemeRafRef.current = requestAnimationFrame(loop);
         };
 
         audio.onended = () => {
           setIsSpeaking(false);
           resetVisemes();
         };
-
         await audio.play();
-        return;
-      } catch (err: unknown) {
-        // Keep the UI consistent if the audio couldn't be played or TTS isn't configured.
+      } catch (err) {
         setIsSpeaking(false);
         resetVisemes();
-        message.error(getErrorText(err) || "Text-to-speech failed. Please check Sarvam/Backend TTS configuration.");
+        message.error("TTS failed. Please check backend config.");
       }
     },
-    [resetVisemes, revokeAudioUrl, startVisemeLoopFromAudio, stopSpeaking],
+    [resetVisemes, stopSpeaking],
   );
-
-  useEffect(() => {
-    if (!sessionId) return;
-    if (!accessToken) {
-      message.error("Please sign in before joining an interview.");
-      navigate("/signin");
-      return;
-    }
-
-    let cancelled = false;
-    (async () => {
-      setLoadingMeta(true);
-      try {
-        const meta = await getInterviewSession({ sessionId, accessToken });
-        if (!cancelled) setSessionMeta(meta);
-      } catch (err: unknown) {
-        message.error(getErrorText(err) || "Failed to load interview session.");
-      } finally {
-        if (!cancelled) setLoadingMeta(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, navigate, sessionId]);
-
-  const wsUrl = useMemo(() => {
-    const base = toWsUrl(String(import.meta.env.VITE_BACKEND_URL || ""));
-    return base ? `${base.replace(/\/$/, "")}/interviews/ws` : "";
-  }, []);
 
   const onWsMessage = useCallback(
     (msg: WsEnvelope) => {
-      if (!msg || typeof msg.type !== "string") return;
-
       if (msg.type === "question.next") {
-        const payload = msg.payload ?? {};
-        const nextQuestion: InterviewQuestion = {
-          id: String(payload.question_id ?? payload.id ?? ""),
-          question_text: String(payload.question_text ?? ""),
-          index: Number(payload.index ?? 0),
+        const p = msg.payload ?? {};
+        const nextQ = {
+          id: String(p.question_id || p.id),
+          question_text: String(p.question_text),
+          index: Number(p.index || 0),
         };
-        setQuestion(nextQuestion);
+        setQuestion(nextQ);
         setEvaluation(null);
         setTypedAnswer("");
-
-        if (autoSpeak && nextQuestion.question_text) {
-          void speakQuestion(nextQuestion.question_text);
-        }
-        return;
-      }
-
-      if (msg.type === "answer.evaluation") {
+        if (autoSpeak && nextQ.question_text)
+          speakQuestion(nextQ.question_text);
+      } else if (msg.type === "answer.evaluation") {
         setEvaluation(msg.payload ?? {});
-        return;
-      }
-
-      if (msg.type === "session.complete") {
+      } else if (msg.type === "session.complete") {
         setReport(msg.payload ?? {});
-        setIsSpeaking(false);
-        resetVisemes();
-        return;
-      }
-
-      if (msg.type === "error") {
-        const payload = (msg.payload ?? {}) as unknown as WsErrorPayload;
-        message.error(`${payload.code || "error"}: ${payload.message || "Unknown error"}`);
       }
     },
-    [autoSpeak, resetVisemes, speakQuestion],
+    [autoSpeak, speakQuestion],
   );
 
+  const wsUrl = useMemo(
+    () => toWsUrl(import.meta.env.VITE_BACKEND_URL) + "/interviews/ws",
+    [],
+  );
   const { isConnected, send } = useInterviewSocket({
     wsUrl,
-    sessionId: String(sessionId || ""),
+    sessionId: sessionId!,
     accessToken,
     onMessage: onWsMessage,
   });
 
-  // Speech-to-text state (candidate answer).
   const {
     transcript,
     interimTranscript,
@@ -284,372 +221,270 @@ function InterviewRoom() {
     browserSupportsSpeechRecognition,
     isMicrophoneAvailable,
   } = useSpeechRecognition();
-
-  const lastSentLenRef = useRef(0);
   const sttDrivesTypedAnswerRef = useRef(false);
-  const transcriptBoxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!listening || !sessionId) return;
-
-    // Backend buffers partial transcripts; we send small deltas periodically to avoid spam.
-    const timer = window.setInterval(() => {
-      const combined = `${finalTranscript} ${interimTranscript}`.trim();
-      if (!combined) return;
-
-      if (combined.length < lastSentLenRef.current) {
-        // Transcript was reset/shortened by the STT engine; restart delta tracking.
-        lastSentLenRef.current = combined.length;
-        return;
-      }
-
-      const delta = combined.slice(lastSentLenRef.current).trim();
-      if (!delta) return;
-
-      const ok = send({
-        type: "answer.partial",
-        session_id: String(sessionId),
-        request_id: `partial-${nowIso()}`,
-        payload: { transcript_chunk: delta },
-      });
-      if (ok) lastSentLenRef.current = combined.length;
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [finalTranscript, interimTranscript, listening, send, sessionId]);
-
-  useEffect(() => {
-    if (!listening) return;
-    if (!sttDrivesTypedAnswerRef.current) return;
-
-    // While listening, keep the editable textarea in sync with speech recognition so users
-    // can see (and later edit) what the mic is picking up.
-    const combined = `${finalTranscript} ${interimTranscript}`.trim();
-    setTypedAnswer(combined);
+    if (listening && sttDrivesTypedAnswerRef.current) {
+      setTypedAnswer(`${finalTranscript} ${interimTranscript}`.trim());
+    }
   }, [finalTranscript, interimTranscript, listening]);
 
-  useEffect(() => {
-    // Keep the transcript viewport pinned to the latest speech.
-    const el = transcriptBoxRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [finalTranscript, interimTranscript]);
-
-  const startListening = async () => {
-    if (!browserSupportsSpeechRecognition) {
-      message.error("This browser does not support speech recognition.");
-      return;
-    }
-    if (!isMicrophoneAvailable) {
-      message.error("Microphone permission denied. Enable mic access for this site.");
-      return;
-    }
-    lastSentLenRef.current = 0;
+  const startListening = () => {
+    if (!browserSupportsSpeechRecognition)
+      return message.error("STT not supported.");
     resetTranscript();
-
-    // Drive the textarea from STT while the mic is on.
     sttDrivesTypedAnswerRef.current = true;
-    setTypedAnswer("");
-
-    try {
-      await SpeechRecognition.startListening({
-        continuous: true,
-        interimResults: true,
-        language: "en-US",
-      });
-    } catch (err: unknown) {
-      sttDrivesTypedAnswerRef.current = false;
-      message.error(getErrorText(err) || "Failed to start listening.");
-    }
+    SpeechRecognition.startListening({
+      continuous: true,
+      interimResults: true,
+    });
   };
 
-  const stopListening = async () => {
-    sttDrivesTypedAnswerRef.current = false;
-    SpeechRecognition.stopListening();
-  };
-
-  const submitAnswerText = async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) {
-      message.warning("Please provide an answer before submitting.");
-      return;
-    }
-    if (!sessionId) return;
-
-    const ok = send({
+  const submitAnswerText = (text: string) => {
+    if (!text.trim()) return message.warning("Answer cannot be empty.");
+    send({
       type: "answer.final",
-      session_id: String(sessionId),
+      session_id: sessionId!,
       request_id: `final-${nowIso()}`,
-      payload: { transcript_text: trimmed },
+      payload: { transcript_text: text.trim() },
     });
-
-    // Even if WS is temporarily down, keep UI responsive.
-    if (!ok) {
-      message.error("Not connected. Please wait for reconnection and try again.");
-      return;
-    }
-
     resetTranscript();
-    lastSentLenRef.current = 0;
     setTypedAnswer("");
   };
 
-  const finishSession = async () => {
-    if (!sessionId) return;
-
-    const ok = send({
-      type: "session.finish",
-      session_id: String(sessionId),
-      request_id: `finish-${nowIso()}`,
-      payload: {},
-    });
-
-    // REST fallback helps when WS is unavailable.
-    if (!ok) {
-      try {
-        const r = await finishInterview({ sessionId, accessToken });
-        setReport(r);
-      } catch (err: unknown) {
-        message.error(getErrorText(err) || "Failed to finish interview.");
-      }
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      stopSpeaking();
-      revokeAudioUrl();
-    };
-  }, [revokeAudioUrl, stopSpeaking]);
-
-  if (!sessionId) {
+  if (loadingMeta)
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <Card className="rounded-2xl">
-          <Text>Missing session id.</Text>
-        </Card>
-      </div>
-    );
-  }
-
-  if (loadingMeta) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center dark:bg-slate-950">
         <Spin size="large" />
       </div>
     );
-  }
-
-  if (report) {
-    return (
-      <div className="min-h-screen bg-slate-50 px-4 py-10">
-        <div className="max-w-3xl mx-auto">
-          <Card className="rounded-2xl shadow-sm border border-slate-100">
-            <Title level={3} className="m-0!">
-              Interview Complete
-            </Title>
-            <Paragraph className="text-slate-600 mt-2">
-              Your session has ended. You can view the final report now.
-            </Paragraph>
-            <div className="flex gap-3 mt-6">
-              <Button onClick={() => navigate("/")}>Back Home</Button>
-              <Button
-                type="primary"
-                className="bg-indigo-600 border-none"
-                onClick={() => navigate(`/interview/${sessionId}/report`)}
-              >
-                View Report
-              </Button>
-            </div>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  const progress =
-    sessionMeta && sessionMeta.max_questions
-      ? `${(question?.index ?? sessionMeta.current_question_index ?? 0) + 1} / ${sessionMeta.max_questions}`
-      : "";
-
-  const strengths = evaluation ? asStringArray(evaluation.strengths) : [];
-  const weaknesses = evaluation ? asStringArray(evaluation.weaknesses) : [];
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-6">
-      <div className="max-w-6xl mx-auto">
-        <header className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 px-4 py-8 transition-colors duration-500">
+      <div className="max-w-7xl mx-auto">
+        {/* Header Section */}
+        <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <Title level={3} className="m-0! tracking-tight">
+            <Title
+              level={2}
+              className="m-0! font-black! tracking-tight! dark:text-white!"
+            >
               Interview Room
             </Title>
-            <div className="flex flex-wrap gap-2 mt-2">
-              <Tag color={isConnected ? "green" : "orange"}>
-                {isConnected ? "WS Connected" : "Reconnecting..."}
+            <div className="flex flex-wrap gap-2 mt-3">
+              <Tag
+                className="border-none! rounded-full! px-3! font-bold uppercase text-[10px] tracking-widest shadow-sm"
+                color={isConnected ? "green" : "red"}
+              >
+                {isConnected ? "WS Connected" : "Disconnected"}
               </Tag>
-              {sessionMeta?.llm_provider && (
-                <Tag color="blue">{sessionMeta.llm_provider}</Tag>
-              )}
-              {sessionMeta?.llm_mode && <Tag>{sessionMeta.llm_mode}</Tag>}
-              {progress && <Tag color="purple">Q {progress}</Tag>}
+              <Tag color="blue" className="rounded-full! border-none shadow-sm">
+                {sessionMeta?.llm_provider}
+              </Tag>
+              <Tag
+                color="purple"
+                className="rounded-full! border-none shadow-sm"
+              >
+                Q {(question?.index ?? 0) + 1} / {sessionMeta?.max_questions}
+              </Tag>
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button onClick={() => setAutoSpeak((v) => !v)}>
-              Auto Speak: {autoSpeak ? "On" : "Off"}
+          <Space>
+            <Button
+              className="rounded-xl! border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+              onClick={() => setAutoSpeak(!autoSpeak)}
+            >
+              Voice: {autoSpeak ? "Auto" : "Manual"}
             </Button>
-            <Button danger onClick={finishSession}>
-              Finish
+            <Button
+              danger
+              type="primary"
+              className="rounded-xl! bg-red-500! hover:bg-red-600! border-none! font-bold"
+              onClick={() =>
+                send({
+                  type: "session.finish",
+                  session_id: sessionId!,
+                  payload: {},
+                })
+              }
+            >
+              Finish Session
             </Button>
-          </div>
+          </Space>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <Card className="rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="flex items-center justify-between mb-3">
-              <Text className="text-slate-600 font-medium">Interviewer</Text>
-              <div className="flex gap-2">
-                <Button
-                  size="small"
-                  onClick={() => question?.question_text && void speakQuestion(question.question_text)}
-                  disabled={!question?.question_text || isSpeaking}
-                >
-                  Speak
-                </Button>
-                <Button size="small" icon={<StopOutlined />} onClick={stopSpeaking} disabled={!isSpeaking} />
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left Column: Avatar & Question */}
+          <div className="lg:col-span-5 space-y-6">
+            <Card className="rounded-3xl! shadow-xl border-none overflow-hidden bg-white dark:bg-slate-900">
+              <div className="p-4 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center">
+                <Text className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                  AI Interviewer
+                </Text>
+                <Space>
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<AudioOutlined />}
+                    onClick={() => speakQuestion(question?.question_text || "")}
+                  />
+                  <Button
+                    size="small"
+                    type="text"
+                    danger
+                    icon={<StopOutlined />}
+                    onClick={stopSpeaking}
+                  />
+                </Space>
               </div>
-            </div>
-
-            <div className="h-[420px] bg-gradient-to-b from-slate-950 to-slate-900 rounded-xl overflow-hidden">
-              <Canvas camera={{ position: [0, 1.45, 2.35], fov: 35 }}>
-                <ambientLight intensity={0.8} />
-                <directionalLight position={[2, 2, 2]} intensity={1.2} />
-                <Environment preset="city" />
-                <OrbitControls enablePan={false} enableZoom={false} />
-                <group position={[0, -1.2, 0]}>
-                  <Avatar activeViseme={activeViseme} isSpeaking={isSpeaking} />
-                </group>
-              </Canvas>
-            </div>
-
-            {/* Keep a hidden audio element in the DOM for predictable playback controls/timing. */}
-            <audio ref={audioRef} className="hidden" />
-          </Card>
-
-          <div className="space-y-5">
-            <Card className="rounded-2xl shadow-sm border border-slate-100">
-              <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-                Current Question
-              </Text>
-              <Paragraph className="text-lg font-semibold text-slate-900 mt-2 mb-0">
-                {question?.question_text || "Waiting for the first question..."}
-              </Paragraph>
+              <div className="h-[450px] bg-slate-950 relative">
+                <Canvas camera={{ position: [0, 1.4, 2.2], fov: 35 }}>
+                  <ambientLight intensity={0.6} />
+                  <pointLight position={[10, 10, 10]} intensity={1} />
+                  <Environment preset="studio" />
+                  <group position={[0, -1.2, 0]}>
+                    <Avatar
+                      activeViseme={activeViseme}
+                      isSpeaking={isSpeaking}
+                    />
+                  </group>
+                  <OrbitControls enableZoom={false} enablePan={false} />
+                </Canvas>
+              </div>
             </Card>
 
-            <Card className="rounded-2xl shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-3">
-                <Text className="text-slate-600 font-medium">Your Answer</Text>
-                <div className="flex gap-2">
-                  <Button
-                    icon={<AudioOutlined />}
-                    onClick={listening ? stopListening : startListening}
-                    disabled={!browserSupportsSpeechRecognition}
-                  >
-                    {listening ? "Stop" : "Speak"}
-                  </Button>
-                  <Button
-                    type="primary"
-                    icon={<SendOutlined />}
-                    className="bg-indigo-600 border-none"
-                    onClick={() => void submitAnswerText(typedAnswer || transcript)}
-                  >
-                    Submit
-                  </Button>
+            <Card className="rounded-3xl! shadow-lg border-none bg-indigo-600 text-white p-2">
+              <div className="p-6">
+                <Text className="text-indigo-200 uppercase text-[10px] font-black tracking-[0.2em] block mb-4">
+                  Interviewer's Question
+                </Text>
+                <Paragraph className="text-xl font-bold text-white! leading-relaxed m-0">
+                  {question?.question_text || "Ready for your first question?"}
+                </Paragraph>
+              </div>
+            </Card>
+          </div>
+
+          {/* Right Column: User Answer & Feedback */}
+          <div className="lg:col-span-7 space-y-6">
+            <Card className="rounded-3xl! shadow-xl border-none bg-white dark:bg-slate-900">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center">
+                      <UserOutlined className="text-indigo-600" />
+                    </div>
+                    <Text className="font-bold dark:text-slate-200">
+                      Your Response
+                    </Text>
+                  </div>
+                  <Space>
+                    <Button
+                      icon={<AudioOutlined />}
+                      onClick={
+                        listening
+                          ? SpeechRecognition.stopListening
+                          : startListening
+                      }
+                      className={`rounded-full! ${listening ? "bg-red-500! text-white! border-none! animate-pulse" : "dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"}`}
+                    >
+                      {listening ? "Recording..." : "Voice Input"}
+                    </Button>
+                    <Button
+                      type="primary"
+                      icon={<SendOutlined />}
+                      onClick={() => submitAnswerText(typedAnswer)}
+                      className="rounded-full! bg-indigo-600! border-none! px-6 font-bold"
+                    >
+                      Submit
+                    </Button>
+                  </Space>
                 </div>
+
+                {/* STT Viewport */}
+                <div className="bg-slate-900 rounded-2xl p-6 min-h-[140px] mb-4 border border-slate-800 font-mono">
+                  <Text
+                    className={`${finalTranscript ? "text-slate-100" : "text-slate-500 italic"} text-base`}
+                  >
+                    {finalTranscript || (listening ? "" : "Microphone idle...")}
+                  </Text>
+                  <Text className="text-indigo-400 opacity-60 ml-1 italic">
+                    {interimTranscript}
+                  </Text>
+                </div>
+
+                <Input.TextArea
+                  value={typedAnswer}
+                  onChange={(e) => {
+                    sttDrivesTypedAnswerRef.current = false;
+                    setTypedAnswer(e.target.value);
+                  }}
+                  placeholder="Click 'Voice Input' to speak or type your answer here..."
+                  className="rounded-2xl! bg-slate-50! dark:bg-slate-800/50! border-none! p-4! text-base! dark:text-slate-200!"
+                  autoSize={{ minRows: 4, maxRows: 8 }}
+                />
               </div>
-
-              {!browserSupportsSpeechRecognition && (
-                <Text className="text-xs text-amber-700">
-                  Speech recognition not supported on this browser. You can still type your answer below.
-                </Text>
-              )}
-              {browserSupportsSpeechRecognition && !isMicrophoneAvailable && (
-                <Text className="text-xs text-amber-700">
-                  Microphone is not available. Enable permissions or type your answer.
-                </Text>
-              )}
-
-              <div
-                ref={transcriptBoxRef}
-                className="mt-3 p-3 bg-slate-900 text-slate-100 rounded-xl min-h-24 max-h-64 overflow-y-auto leading-relaxed"
-              >
-                <span className="opacity-100">{finalTranscript}</span>
-                <span className="opacity-60 text-sky-300">{interimTranscript}</span>
-                {!finalTranscript && !interimTranscript && (
-                  <span className="text-slate-500 italic">Waiting for speech...</span>
-                )}
-              </div>
-
-              <Input.TextArea
-                value={typedAnswer}
-                onChange={(e) => {
-                  // If the user starts editing, stop overwriting the textarea with STT updates.
-                  sttDrivesTypedAnswerRef.current = false;
-                  setTypedAnswer(e.target.value);
-                }}
-                placeholder="Optional: type/edit your answer here before submitting"
-                className="mt-3 rounded-xl"
-                autoSize={{ minRows: 3, maxRows: 7 }}
-              />
             </Card>
 
             {evaluation && (
-              <Card className="rounded-2xl shadow-sm border border-slate-100">
-                <div className="flex items-center justify-between">
-                  <Title level={5} className="m-0!">
-                    Feedback
-                  </Title>
-                  {typeof evaluation.score === "number" && (
-                    <Tag color="geekblue">Score: {evaluation.score}</Tag>
-                  )}
-                </div>
+              <Card className="rounded-3xl! shadow-lg border-none bg-white dark:bg-slate-900 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <Title
+                      level={4}
+                      className="m-0! dark:text-slate-200! flex items-center gap-2"
+                    >
+                      <RobotOutlined className="text-indigo-500" /> AI
+                      Evaluation
+                    </Title>
+                    <Tag
+                      color="indigo"
+                      className="rounded-full! px-4! py-1! border-none! font-bold"
+                    >
+                      SCORE: {evaluation.score}
+                    </Tag>
+                  </div>
 
-                {evaluation.feedback && (
-                  <Paragraph className="text-slate-700 mt-3">
-                    {String(evaluation.feedback)}
+                  <Paragraph className="text-slate-600 dark:text-slate-400 text-lg italic mb-6">
+                    "{evaluation.feedback}"
                   </Paragraph>
-                )}
 
-                {strengths.length > 0 && (
-                  <div className="mt-3">
-                    <Text className="text-xs text-slate-400 font-bold uppercase tracking-wider">
-                      Strengths
-                    </Text>
-                    <ul className="list-disc pl-5 mt-2 text-slate-700">
-                      {strengths.map((s, idx) => (
-                        <li key={idx}>{s}</li>
-                      ))}
-                    </ul>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 bg-green-50 dark:bg-green-500/10 rounded-2xl">
+                      <Text className="text-green-600 uppercase text-[10px] font-black tracking-widest block mb-2">
+                        Strengths
+                      </Text>
+                      <ul className="list-none p-0 m-0 space-y-1">
+                        {strengths.map((s, i) => (
+                          <li
+                            key={i}
+                            className="text-green-800 dark:text-green-400 text-sm flex gap-2"
+                          >
+                            <CheckCircleOutlined className="mt-1" /> {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="p-4 bg-red-50 dark:bg-red-500/10 rounded-2xl">
+                      <Text className="text-red-600 uppercase text-[10px] font-black tracking-widest block mb-2">
+                        Weaknesses
+                      </Text>
+                      <ul className="list-none p-0 m-0 space-y-1 text-sm text-red-800 dark:text-red-400">
+                        {weaknesses.map((w, i) => (
+                          <li key={i}>• {w}</li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                )}
-
-                {weaknesses.length > 0 && (
-                  <div className="mt-3">
-                    <Text className="text-xs text-slate-400 font-bold uppercase tracking-wider">
-                      Weaknesses
-                    </Text>
-                    <ul className="list-disc pl-5 mt-2 text-slate-700">
-                      {weaknesses.map((w, idx) => (
-                        <li key={idx}>{w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                </div>
               </Card>
             )}
           </div>
         </div>
+
+        <audio ref={audioRef} className="hidden" />
       </div>
     </div>
   );
