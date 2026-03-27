@@ -360,7 +360,7 @@ function InterviewRoom() {
 				<div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 					{/* Left Column: Avatar & Question */}
 					<div className="lg:col-span-5 space-y-6">
-						<Card className="rounded-3xl! shadow-xl border-none overflow-hidden bg-white dark:bg-slate-900">
+						<Card className="rounded-3xl! shadow-xl border border-slate-200! dark:border-slate-800! overflow-hidden bg-white dark:bg-slate-900">
 							<div className="p-4 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center">
 								<Text className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
 									AI Interviewer
@@ -412,7 +412,7 @@ function InterviewRoom() {
 							</div>
 						</Card>
 
-						<Card className="rounded-3xl! shadow-lg border-none bg-indigo-600 text-white p-2">
+						<Card className="rounded-3xl! shadow-lg border-none bg-indigo-600 dark:bg-indigo-500/90 text-white p-2">
 							<div className="p-6">
 								<Text className="text-indigo-200 uppercase text-[10px] font-black tracking-[0.2em] block mb-4">
 									Interviewer's Question
@@ -427,7 +427,7 @@ function InterviewRoom() {
 
 					{/* Right Column: User Answer & Feedback */}
 					<div className="lg:col-span-7 space-y-6">
-						<Card className="rounded-3xl! shadow-xl border-none bg-white dark:bg-slate-900">
+						<Card className="rounded-3xl! shadow-xl border border-slate-200! dark:border-slate-800! bg-white dark:bg-slate-900">
 							<div className="p-6">
 								<div className="flex items-center justify-between mb-6">
 									<div className="flex items-center gap-2">
@@ -466,9 +466,9 @@ function InterviewRoom() {
 								</div>
 
 								{/* STT Viewport */}
-								<div className="bg-slate-900 rounded-2xl p-6 min-h-[140px] mb-4 border border-slate-800 font-mono">
+								<div className="bg-slate-100 dark:bg-slate-900 rounded-2xl p-6 min-h-[140px] mb-4 border border-slate-200 dark:border-slate-800 font-mono">
 									<Text
-										className={`${finalTranscript ? "text-slate-100" : "text-slate-500 italic"} text-base`}
+										className={`${finalTranscript ? "text-slate-800 dark:text-slate-100" : "text-slate-500 italic"} text-base`}
 									>
 										{finalTranscript ||
 											(listening
@@ -494,7 +494,7 @@ function InterviewRoom() {
 						</Card>
 
 						{evaluation && (
-							<Card className="rounded-3xl! shadow-lg border-none bg-white dark:bg-slate-900 animate-in slide-in-from-bottom-4 duration-500">
+							<Card className="rounded-3xl! shadow-lg border border-slate-200! dark:border-slate-800! bg-white dark:bg-slate-900 animate-in slide-in-from-bottom-4 duration-500">
 								<div className="p-6">
 									<div className="flex justify-between items-center mb-6">
 										<Title

@@ -190,7 +190,7 @@ export default function GdRoom() {
 
   return (
     <div className="h-dvh overflow-hidden bg-slate-950 p-2 md:p-4 transition-colors duration-500">
-      <div className="mx-auto flex h-full w-full max-w-400 flex-col overflow-hidden rounded-4xl border border-slate-800 bg-slate-900/50 shadow-2xl backdrop-blur-md">
+      <div className="flex h-full w-full flex-col overflow-hidden rounded-4xl border border-slate-800 bg-slate-900/50 shadow-2xl backdrop-blur-md">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
           <Space size="large">
@@ -220,7 +220,7 @@ export default function GdRoom() {
 
         <div className="flex min-h-0 flex-1">
           {/* Main Stage */}
-          <section className="flex min-w-0 flex-1 flex-col">
+          <section className="flex flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
               <ParticipantGrid
                 localStream={localStream}
@@ -283,7 +283,7 @@ export default function GdRoom() {
 
           {/* Sidebar - Desktop Only */}
           <aside className="hidden w-95 flex-col border-l border-slate-800 bg-slate-900/30 lg:flex">
-            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+            <div className="p-2 overflow-y-auto custom-scrollbar flex-1">
               <TopicPanel
                 topic={topic}
                 context={context}
