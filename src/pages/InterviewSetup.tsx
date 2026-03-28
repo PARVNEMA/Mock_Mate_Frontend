@@ -157,7 +157,7 @@ function InterviewSetup() {
 					</Text>
 				</header>
 
-				<Card className="rounded-3xl! shadow-xl dark:shadow-black/40 border-none dark:bg-slate-900 overflow-hidden">
+				<Card className="rounded-3xl! shadow-xl dark:shadow-black/40 border border-slate-200! dark:border-slate-800! bg-white! dark:bg-slate-900 overflow-hidden">
 					<Form<SetupFormValues>
 						form={form}
 						layout="vertical"
@@ -169,7 +169,7 @@ function InterviewSetup() {
 						{/* 1. Resume Upload Section */}
 						<div className="mb-8">
 							<div className="flex items-center gap-2 mb-4 ml-1">
-								<FilePdfOutlined className="text-white!" />
+								<FilePdfOutlined className="text-indigo-500!" />
 								<span className={labelText}>Resume</span>
 							</div>
 							<Upload.Dragger
@@ -181,15 +181,15 @@ function InterviewSetup() {
 									setResumeFileList(info.fileList.slice(-1))
 								}
 								onRemove={() => setResumeFileList([])}
-								className="bg-slate-50! dark:bg-slate-800/30!  dark:border-slate-700! hover:border-indigo-400! transition-all rounded-2xl!"
+								className="bg-slate-50! dark:bg-slate-800/30! border-slate-200! dark:border-slate-700! hover:border-indigo-400! transition-all rounded-2xl!"
 							>
 								<p className="ant-upload-drag-icon mb-2!">
 									<InboxOutlined className="text-indigo-500" />
 								</p>
-								<p className="ant-upload-text dark:text-slate-300! font-semibold">
+								<p className="ant-upload-text text-slate-700! dark:text-slate-300! font-semibold">
 									Drop your resume here in pdf format
 								</p>
-								<p className="ant-upload-hint dark:text-slate-500! text-xs">
+								<p className="ant-upload-hint text-slate-500! dark:text-slate-500! text-xs">
 									AI will analyze this file to generate
 									tailored questions.
 								</p>
@@ -251,8 +251,8 @@ function InterviewSetup() {
 							rules={[{ required: true }]}
 						>
 							<Select
-								className="rounded-xl! h-11 text-white! dark:bg-slate-800!"
-								popupClassName="dark:bg-slate-800! text-white!"
+								className={`${inputBase} h-11!`}
+								popupClassName="dark:bg-slate-800! dark:text-white!"
 								options={[
 									{
 										value: "TR",
@@ -276,7 +276,7 @@ function InterviewSetup() {
 
 						{/* 3. LLM Configuration Section */}
 						<div className="flex items-center gap-1 mb-4 ml-1">
-							<SettingOutlined className="text-white! mr-2" />
+							<SettingOutlined className="text-indigo-500! mr-2" />
 							<span className={labelText}>
 								Engine Configuration
 							</span>
@@ -338,8 +338,8 @@ function InterviewSetup() {
 												rules={[{ required: true }]}
 											>
 												<Select
-													className="h-11 bg-slate-600 rounded-xl border-slate-200"
-													popupClassName="dark:bg-slate-800! text-white!"
+													className={`${inputBase} h-11!`}
+													popupClassName="dark:bg-slate-800! dark:text-white!"
 													options={[
 														{
 															value: "gemini",

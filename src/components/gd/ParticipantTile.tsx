@@ -28,17 +28,14 @@ export default function ParticipantTile({ stream, label, isLocal }: Props) {
   }, [stream, tryPlay]);
 
   return (
-    <Card className="rounded-xl overflow-hidden border border-slate-100">
-      <div className="relative bg-slate-900 rounded-lg overflow-hidden">
+    <Card className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div className="relative overflow-hidden rounded-lg bg-slate-900">
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted={isLocal}
-          onLoadedMetadata={() => {
-            void tryPlay();
-          }}
-          className="w-full h-48 object-cover"
+          className="h-48 w-full object-cover"
         />
         {playbackBlocked && (
           <button
@@ -52,11 +49,11 @@ export default function ParticipantTile({ stream, label, isLocal }: Props) {
           </button>
         )}
         {!stream && (
-          <div className="absolute inset-0 flex items-center justify-center text-slate-200 text-sm">
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-200">
             Connecting...
           </div>
         )}
-        <div className="absolute top-2 left-2 flex gap-2">
+        <div className="absolute left-2 top-2 flex gap-2">
           <Tag color={isLocal ? "blue" : "geekblue"}>{label}</Tag>
         </div>
       </div>
