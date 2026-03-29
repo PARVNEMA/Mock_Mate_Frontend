@@ -19,6 +19,18 @@ import GdLobby from "./pages/GdLobby.tsx";
 import GdRoom from "./pages/GdRoom.tsx";
 import axios from "axios";
 
+const backendUrl = String(import.meta.env.VITE_BACKEND_URL || "").trim();
+if (backendUrl) {
+  try {
+    const backendHost = new URL(backendUrl).hostname.toLowerCase();
+    if (backendHost.includes("ngrok")) {
+      axios.defaults.headers.common["ngrok-skip-browser-warning"] = "true";
+    }
+  } catch {
+    // Ignore invalid URL and keep default axios behavior.
+  }
+}
+
 const router = createBrowserRouter([
   {
     path: "/",
