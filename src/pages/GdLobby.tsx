@@ -17,7 +17,6 @@ import {
   RocketOutlined,
   LogoutOutlined,
   WarningOutlined,
-  UsergroupAddOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
@@ -115,29 +114,20 @@ export default function GdLobby() {
       {/* Background Ambience */}
       <div className="absolute top-0 right-0 w-12.5 h-125 bg-indigo-500/5 blur-[120px] pointer-events-none" />
 
-      <div className="max-w-5xl mx-auto space-y-10 relative">
+      <div className="max-w-7xl mx-auto space-y-10 relative">
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-800/50">
-              <UsergroupAddOutlined className="text-indigo-600 dark:text-indigo-400 text-xs" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
-                Matchmaking Lobby
-              </span>
-            </div>
+        <div className="md:items-end gap-6">
+          <div className="text-center">
             <Title
               level={1}
-              className="m-0! font-black! tracking-tighter! text-slate-900! dark:text-white!"
+              className="text-5xl! font-black! tracking-tighter! text-slate-900! dark:text-white! mb-4"
             >
               Group Discussion
             </Title>
-            <Text className="text-lg! text-slate-500 dark:text-slate-400 block max-w-xl">
+            <Text className="text-lg! text-slate-500 dark:text-slate-400 block">
               Connect with peers globally and practice your communication skills
               in a live environment.
             </Text>
-          </div>
-          <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <ConnectionBadge connected={isConnected} />
           </div>
         </div>
 
@@ -166,6 +156,9 @@ export default function GdLobby() {
             <LobbyStatusCard status={status} />
           </div>
           <div className="md:col-span-5">
+            <div className="mb-4 ml-auto w-fit flex justify-end bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <ConnectionBadge connected={isConnected} />
+            </div>
             <QueueStats
               waitingCount={status?.waiting_count ?? 0}
               needed={status?.needed ?? 0}

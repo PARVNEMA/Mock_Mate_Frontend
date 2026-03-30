@@ -258,10 +258,10 @@ const QuizSelector = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 px-4 py-4 transition-colors duration-500 relative overflow-hidden">
+    <div className="min-h-screen max-w-7xl mx-auto bg-slate-50 dark:bg-slate-950 px-4 py-4 transition-colors duration-500 relative overflow-hidden">
       {/* Dynamic Ambience */}
       <div className="absolute top-0 right-0 w-150 h-150 bg-indigo-500/5 blur-[120px] pointer-events-none" />
-      <div className="max-w-3xl mx-auto relative">
+      <div className="mt-10! mx-auto relative">
         <div className="text-center">
           <Title
             level={1}

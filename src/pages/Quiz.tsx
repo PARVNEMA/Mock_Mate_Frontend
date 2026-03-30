@@ -130,7 +130,7 @@ function Quiz() {
 
       setQuizResult(data);
       message.success("Quiz submitted successfully!");
-      window.scrollTo({ top: 0 });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error: any) {
       message.error("Submission failed (500)");
     } finally {
@@ -171,30 +171,30 @@ function Quiz() {
 
   if (loading)
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-[#0d1117] transition-colors duration-300">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
         <Spin size="large" />
-        <Text className="mt-4 text-slate-500! dark:text-slate-400! animate-pulse">
-          AI is preparing your quiz...
+        <Text className="mt-4 text-slate-500! dark:text-slate-400! animate-pulse font-medium">
+          AI is preparing your custom challenge...
         </Text>
       </div>
     );
 
   if (quizResult) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0d1117] py-12 px-4 transition-colors duration-300">
-        <div className="mx-20">
-          <Card className="shadow-2xl rounded-3xl! mb-10 text-center bg-white dark:bg-[#161b22] border-slate-100! dark:border-slate-800!">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12 transition-colors duration-500">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8">
+          <Card className="shadow-2xl rounded-3xl! mb-10 text-center bg-white dark:bg-slate-900 border-slate-200! dark:border-slate-800!">
             <Result
               status={quizResult.score_percentage >= 70 ? "success" : "warning"}
               title={
-                <span className="text-slate-900! dark:text-white! font-black text-2xl tracking-tight">
-                  Assessment Score: {quizResult.score_percentage}%
+                <span className="text-slate-900! dark:text-white! font-black text-3xl tracking-tight">
+                  {quizResult.score_percentage}%
                 </span>
               }
               subTitle={
-                <span className="text-slate-500! dark:text-slate-400!">
-                  You got {quizResult.correct_answers} out of{" "}
-                  {quizResult.total_questions} questions correct.
+                <span className="text-slate-500! dark:text-slate-400! text-lg">
+                  Performance: {quizResult.correct_answers} /{" "}
+                  {quizResult.total_questions} Correct
                 </span>
               }
               extra={[
@@ -204,17 +204,17 @@ function Quiz() {
                   icon={<DownloadOutlined />}
                   onClick={downloadPDF}
                   size="large"
-                  className="rounded-xl! bg-indigo-600! border-none! shadow-lg shadow-indigo-500/20 hover:scale-105! transition-all"
+                  className="rounded-xl! h-12! bg-indigo-600! border-none! shadow-lg shadow-indigo-500/20 hover:scale-105! transition-all font-bold"
                 >
-                  Download Report
+                  Download Results
                 </Button>,
                 <Button
                   key="back"
                   onClick={() => navigate("/")}
                   size="large"
-                  className="rounded-xl! dark:bg-slate-800! dark:text-white! dark:border-slate-700! hover:border-indigo-500!"
+                  className="rounded-xl! h-12! dark:bg-slate-800! dark:text-white! dark:border-slate-700! hover:border-indigo-500! font-bold"
                 >
-                  Back Home
+                  Dashboard
                 </Button>,
               ]}
             />
@@ -223,54 +223,57 @@ function Quiz() {
           <div className="space-y-6">
             <Title
               level={4}
-              className="dark:text-slate-300! px-2 my-4 uppercase tracking-widest text-lg! font-bold"
+              className="dark:text-slate-300! px-2 my-6 uppercase tracking-widest text-sm! font-black"
             >
-              Question Review
+              Review & Explanations
             </Title>
             {quizResult.review.map((item, idx) => (
               <Card
                 key={idx}
-                className="rounded-2xl! border-none shadow-sm dark:bg-[#161b22] overflow-hidden mb-4!"
+                className="rounded-2xl! border-slate-200! dark:border-slate-800! shadow-sm bg-white dark:bg-slate-900 overflow-hidden mb-6!"
               >
-                <div className="flex items-start gap-4 p-2">
+                <div className="flex items-start gap-5 p-2">
                   <div className="mt-1">
                     {item.selected_option === item.correct_option ? (
-                      <CheckCircleOutlined className="text-green-500 text-xl" />
+                      <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-full flex">
+                        <CheckCircleOutlined className="text-green-600 dark:text-green-400 text-xl" />
+                      </div>
                     ) : (
-                      <CloseCircleOutlined className="text-red-500 text-xl" />
+                      <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-full flex">
+                        <CloseCircleOutlined className="text-red-600 dark:text-red-400 text-xl" />
+                      </div>
                     )}
                   </div>
                   <div className="flex-1">
                     <Text
                       strong
-                      className="block mb-6 text-lg! text-slate-800! dark:text-slate-200! leading-snug"
+                      className="block mb-6 text-xl! text-slate-800! dark:text-slate-100! leading-relaxed"
                     >
-                      {item.question_text}
+                      {idx + 1}. {item.question_text}
                     </Text>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {item.options.map((opt, i) => {
-                        let containerStyle =
-                          "p-4 rounded-xl border-2 transition-all ";
+                        let style = "p-5 rounded-2xl border-2 transition-all ";
                         if (i === item.correct_option)
-                          containerStyle +=
-                            "bg-green-50/50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30 text-green-700 dark:text-green-400 font-bold";
+                          style +=
+                            "bg-green-50! dark:bg-green-950/20! border-green-200! dark:border-green-800/50! text-green-700! dark:text-green-400! font-black";
                         else if (i === item.selected_option)
-                          containerStyle +=
-                            "bg-red-50/50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400 font-bold";
+                          style +=
+                            "bg-red-50! dark:bg-red-950/20! border-red-200! dark:border-red-800/50! text-red-700! dark:text-red-400! font-black";
                         else
-                          containerStyle +=
-                            "bg-slate-50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-500";
+                          style +=
+                            "bg-slate-50! dark:bg-slate-800/20! border-slate-100! dark:border-slate-800! text-slate-500! dark:text-slate-500!";
 
                         return (
-                          <div key={i} className={containerStyle}>
+                          <div key={i} className={style}>
                             {opt}
                           </div>
                         );
                       })}
                     </div>
-                    <div className="mt-6 p-5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl border-l-4 border-indigo-400">
-                      <Text className="text-lg! text-indigo-900! dark:text-indigo-300! leading-relaxed italic">
-                        <strong className="not-italic uppercase text-lg mr-1 opacity-70">
+                    <div className="mt-8 p-6 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border-l-4 border-indigo-500">
+                      <Text className="text-base! text-slate-700! dark:text-slate-300! leading-loose italic">
+                        <strong className="not-italic uppercase text-xs tracking-widest font-black text-indigo-600 dark:text-indigo-400 mr-2">
                           Explanation:
                         </strong>
                         {item.explanation}
@@ -287,31 +290,31 @@ function Quiz() {
   }
 
   return (
-    <div className="mx-auto pt-4 bg-slate-50 dark:bg-[#0d1117] min-h-screen transition-all duration-500">
-      <header className="flex flex-col justify-between md:flex-row md:items-end">
+    <div className="bg-slate-50 dark:bg-slate-950 min-h-screen transition-all duration-500 py-10">
+      <header className="max-w-7xl mx-auto px-4 lg:px-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <Button
             icon={<LeftOutlined />}
             type="text"
             onClick={() => navigate("/")}
-            className="mx-20! mb-2! pl-0! text-slate-500! dark:text-slate-400! hover:text-slate-700! transition-colors text-lg!"
+            className="mb-4! pl-0! text-slate-400! hover:text-indigo-500! transition-colors font-bold uppercase tracking-widest text-[10px]!"
           >
-            Exit Quiz
+            Cancel Session
           </Button>
           <Title
             level={2}
-            className="mx-20! font-black! tracking-tight! dark:text-indigo-400!"
+            className="m-0! font-black! tracking-tighter! text-slate-900! dark:text-white!"
           >
-            {quizType === "quick" ? "Skill Practice" : "Role Assessment"}
+            {quizType === "quick" ? "Skill Sprint" : "Job Role Simulation"}
           </Title>
         </div>
-        <div className="flex gap-2 flex-wrap mx-20">
+        <div className="flex gap-2 flex-wrap">
           {quizType === "quick" ? (
             skills.map((s) => (
               <Tag
-                color="blue"
                 key={s}
-                className="rounded-full! px-4! py-1! border-none! shadow-sm"
+                color="blue"
+                className="rounded-full! px-4! py-1! border-none! font-bold shadow-sm uppercase text-[10px]"
               >
                 {s}
               </Tag>
@@ -319,7 +322,7 @@ function Quiz() {
           ) : (
             <Tag
               color="purple"
-              className="rounded-full! px-5! py-1! border-none! shadow-sm font-bold tracking-wide uppercase text-[10px]"
+              className="rounded-full! px-5! py-1! border-none! font-bold shadow-sm uppercase text-[10px]"
             >
               {role}
             </Tag>
@@ -327,18 +330,18 @@ function Quiz() {
         </div>
       </header>
 
-      <div className="mx-20">
+      <div className="max-w-7xl mx-auto px-4 lg:px-8">
         {questions.map((q, idx) => (
           <Card
             key={q.id}
             title={
-              <h2 className="text-xl text-slate-400 uppercase font-extrabold">
+              <span className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">
                 Question {idx + 1}
-              </h2>
+              </span>
             }
-            className="mb-4! rounded-3xl! shadow-xl dark:shadow-black/20 border border-slate-200! dark:border-slate-800! bg-white! dark:bg-[#161b22] overflow-hidden"
+            className="rounded-4xl! shadow-xl dark:shadow-black/40 border-none bg-white dark:bg-slate-900 overflow-hidden my-4!"
           >
-            <Paragraph className="text-lg! font-bold text-slate-800! dark:text-slate-100!">
+            <Paragraph className="text-xl! font-bold text-slate-800! dark:text-slate-100! mb-10 leading-tight">
               {q.question_text}
             </Paragraph>
             <Radio.Group
@@ -346,23 +349,33 @@ function Quiz() {
               value={selectedAnswers[q.id]}
               className="w-full"
             >
-              <div className="flex flex-col gap-4">
-                {q.options.map((opt, i) => (
-                  <Radio
-                    key={i}
-                    value={i}
-                    className="group w-full rounded-2xl! border border-slate-200 p-5 transition-all dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500"
-                  >
-                    <span className="ml-2 text-lg">{opt}</span>
-                  </Radio>
-                ))}
+              <div className="grid grid-cols-1 gap-4">
+                {q.options.map((opt, i) => {
+                  const isSelected = selectedAnswers[q.id] === i;
+                  return (
+                    <Radio
+                      key={i}
+                      value={i}
+                      className={`
+                        w-full rounded-2xl! border-2! p-2! transition-all relative
+                        ${
+                          isSelected
+                            ? "bg-indigo-50! dark:bg-indigo-900/20! border-indigo-500! text-indigo-700! dark:text-indigo-300!"
+                            : "bg-slate-50/50 dark:bg-slate-800/30 border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-400"
+                        }
+                      `}
+                    >
+                      <span className="ml-2 text-lg font-medium">{opt}</span>
+                    </Radio>
+                  );
+                })}
               </div>
             </Radio.Group>
           </Card>
         ))}
       </div>
 
-      <div className="mt-2 bg-linear-to-t from-slate-50 dark:from-[#0d1117] mx-20!">
+      <div className="max-w-7xl mx-auto px-4 lg:px-8 mt-12 pb-20">
         <Button
           type="primary"
           size="large"
@@ -370,14 +383,15 @@ function Quiz() {
           onClick={handleSubmit}
           loading={submitting}
           disabled={Object.keys(selectedAnswers).length < questions.length}
-          className="h-16 rounded-2xl! bg-indigo-600! hover:bg-indigo-700! border-none! font-white! text-lg! tracking-wide! shadow-2xl shadow-indigo-500/40 disabled:bg-slate-200! dark:disabled:bg-slate-800! transition-all hover:scale-[1.01]"
+          className="h-16 rounded-3xl! bg-indigo-600! hover:bg-indigo-700! border-none! font-black! text-lg! shadow-2xl shadow-indigo-500/40 disabled:bg-slate-200! dark:disabled:bg-slate-800! transition-all active:scale-95"
         >
-          {submitting ? "Processing..." : "Submit Final Assessment"}
+          {submitting ? "Analyzing Responses..." : "Complete Assessment"}
         </Button>
+
         {Object.keys(selectedAnswers).length < questions.length && (
-          <div className="text-center mt-3 animate-bounce">
-            <Text className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">
-              Answer all questions to unlock submission
+          <div className="text-center mt-4 animate-pulse">
+            <Text className="text-[10px] uppercase font-black text-slate-400 tracking-widest">
+              Please finalize all {questions.length} responses to proceed
             </Text>
           </div>
         )}
