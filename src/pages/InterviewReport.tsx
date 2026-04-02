@@ -8,7 +8,7 @@ import {
   Progress,
   Divider,
 } from "antd";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getInterviewReport } from "../services/interviewApi";
 import {
   TrophyOutlined,
@@ -29,7 +29,10 @@ const asStringArray = (value: unknown): string[] => {
 
 const getErrorText = (err: unknown): string => {
   if (typeof err === "string") return err;
-  const e = err as any;
+  const e = err as {
+    response?: { data?: { detail?: string; message?: string } };
+    message?: string;
+  };
   return (
     e.response?.data?.detail ||
     e.response?.data?.message ||
@@ -40,18 +43,28 @@ const getErrorText = (err: unknown): string => {
 
 function InterviewReportPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navState = (location.state ?? null) as {
+    report?: InterviewReport;
+  } | null;
 
   const accessToken = useMemo(
     () => String(localStorage.getItem("accessToken") || ""),
     [],
   );
 
-  const [loading, setLoading] = useState(true);
-  const [report, setReport] = useState<InterviewReport | null>(null);
+  const [loading, setLoading] = useState(!navState?.report);
+  const [report, setReport] = useState<InterviewReport | null>(
+    navState?.report ?? null,
+  );
 
   useEffect(() => {
     if (!sessionId) return;
+    if (navState?.report) {
+      setLoading(false);
+      return;
+    }
     if (!accessToken) {
       message.error("Please sign in to view your report.");
       navigate("/signin");
@@ -74,7 +87,7 @@ function InterviewReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, navigate, sessionId]);
+  }, [accessToken, navigate, navState?.report, sessionId]);
 
   if (loading) {
     return (
@@ -181,7 +194,7 @@ function InterviewReportPage() {
                 icon={<RocketOutlined />}
                 size="large"
                 className="h-14 rounded-2xl flex-2 bg-indigo-600 hover:bg-indigo-700 border-none font-black shadow-lg shadow-indigo-500/20"
-                onClick={() => navigate("/interview-setup")}
+                onClick={() => navigate("/interview")}
               >
                 Start New Session
               </Button>

@@ -9,7 +9,6 @@ import {
   Spin,
   Tag,
   Typography,
-  Divider,
   Space,
 } from "antd";
 import {
@@ -18,7 +17,6 @@ import {
   StopOutlined,
   RobotOutlined,
   UserOutlined,
-  CheckCircleOutlined,
 } from "@ant-design/icons";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import SpeechRecognition, {
@@ -45,6 +43,10 @@ import type {
 const { Title, Text, Paragraph } = Typography;
 
 // --- Helper Utilities ---
+
+const tagBaseClass =
+  "flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide shadow-sm";
+
 const toWsUrl = (httpBaseUrl: string): string => {
   const trimmed = String(httpBaseUrl || "")
     .trim()
@@ -61,6 +63,20 @@ const asStringArray = (value: unknown): string[] => {
   return [];
 };
 
+const getErrorText = (err: unknown): string => {
+  if (typeof err === "string") return err;
+  const e = err as {
+    response?: { data?: { detail?: string; message?: string } };
+    message?: string;
+  };
+  return (
+    e.response?.data?.detail ||
+    e.response?.data?.message ||
+    e.message ||
+    "Unknown error"
+  );
+};
+
 function InterviewRoom() {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -75,6 +91,8 @@ function InterviewRoom() {
     null,
   );
   const [loadingMeta, setLoadingMeta] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const [isWaitingForNext, setIsWaitingForNext] = useState(false);
 
   const navState = (location.state ?? null) as {
     firstQuestion?: InterviewQuestion;
@@ -101,6 +119,12 @@ function InterviewRoom() {
   const lastVisemeRef = useRef<VisemeName>("viseme_sil");
 
   // --- Handlers ---
+
+  const isLastQuestion =
+    question && sessionMeta
+      ? question.index + 1 === sessionMeta.max_questions
+      : false;
+
   const stopVisemeLoop = useCallback(() => {
     if (visemeRafRef.current !== null) {
       cancelAnimationFrame(visemeRafRef.current);
@@ -120,6 +144,10 @@ function InterviewRoom() {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+    }
+    if (audioObjectUrlRef.current) {
+      URL.revokeObjectURL(audioObjectUrlRef.current);
+      audioObjectUrlRef.current = null;
     }
     setIsSpeaking(false);
     resetVisemes();
@@ -171,7 +199,7 @@ function InterviewRoom() {
           resetVisemes();
         };
         await audio.play();
-      } catch (err) {
+      } catch {
         setIsSpeaking(false);
         resetVisemes();
         message.error("TTS failed. Please check backend config.");
@@ -183,21 +211,34 @@ function InterviewRoom() {
   const onWsMessage = useCallback(
     (msg: WsEnvelope) => {
       if (msg.type === "question.next") {
+        setIsWaitingForNext(false);
         const p = msg.payload ?? {};
         const nextQ = {
           id: String(p.question_id || p.id),
           question_text: String(p.question_text),
-          index: Number(p.index || 0),
+          index: Number(p.index ?? p.question_index ?? 0),
         };
         setQuestion(nextQ);
+        setSessionMeta((current) =>
+          current
+            ? { ...current, current_question_index: nextQ.index }
+            : current,
+        );
         setEvaluation(null);
         setTypedAnswer("");
         if (autoSpeak && nextQ.question_text)
           speakQuestion(nextQ.question_text);
       } else if (msg.type === "answer.evaluation") {
         setEvaluation(msg.payload ?? {});
+        setIsWaitingForNext(false);
       } else if (msg.type === "session.complete") {
-        setReport(msg.payload ?? {});
+        setSessionMeta((current) =>
+          current ? { ...current, status: "completed" } : current,
+        );
+        setReport((msg.payload ?? {}) as InterviewReport);
+      } else if (msg.type === "error") {
+        const payload = (msg.payload ?? {}) as WsErrorPayload;
+        message.error(payload.message || "Interview socket error.");
       }
     },
     [autoSpeak, speakQuestion],
@@ -215,7 +256,6 @@ function InterviewRoom() {
   });
 
   const {
-    transcript,
     interimTranscript,
     finalTranscript,
     listening,
@@ -225,15 +265,89 @@ function InterviewRoom() {
   } = useSpeechRecognition();
   const sttDrivesTypedAnswerRef = useRef(false);
 
+  const navigateToReport = useCallback(
+    (nextReport?: InterviewReport | null) => {
+      if (!sessionId) return;
+      navigate(`/interview/${sessionId}/report`, {
+        replace: true,
+        state: nextReport ? { report: nextReport } : undefined,
+      });
+    },
+    [navigate, sessionId],
+  );
+
   useEffect(() => {
     if (listening && sttDrivesTypedAnswerRef.current) {
       setTypedAnswer(`${finalTranscript} ${interimTranscript}`.trim());
     }
   }, [finalTranscript, interimTranscript, listening]);
 
+  useEffect(() => {
+    if (!sessionId) {
+      message.error("Interview session not found.");
+      navigate("/interview", { replace: true });
+      return;
+    }
+    if (!accessToken) {
+      message.error("Please sign in to continue the interview.");
+      navigate("/signin", { replace: true });
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoadingMeta(true);
+      try {
+        const session = await getInterviewSession({ sessionId, accessToken });
+        if (cancelled) return;
+
+        setSessionMeta(session);
+        if (
+          (session.status === "completed" || session.status === "aborted") &&
+          !report
+        ) {
+          navigateToReport();
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          message.error(
+            getErrorText(err) || "Failed to load interview session.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingMeta(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, navigate, navigateToReport, report, sessionId]);
+
+  useEffect(() => {
+    if (!report) return;
+    navigateToReport(report);
+  }, [navigateToReport, report]);
+
+  useEffect(() => {
+    return () => {
+      SpeechRecognition.stopListening();
+      stopSpeaking();
+      if (audioObjectUrlRef.current) {
+        URL.revokeObjectURL(audioObjectUrlRef.current);
+        audioObjectUrlRef.current = null;
+      }
+    };
+  }, [stopSpeaking]);
+
   const startListening = () => {
     if (!browserSupportsSpeechRecognition)
       return message.error("STT not supported.");
+    if (!isMicrophoneAvailable) {
+      return message.error("Microphone access is blocked.");
+    }
     resetTranscript();
     sttDrivesTypedAnswerRef.current = true;
     SpeechRecognition.startListening({
@@ -244,17 +358,49 @@ function InterviewRoom() {
 
   const submitAnswerText = (text: string) => {
     if (!text.trim()) return message.warning("Answer cannot be empty.");
+
+    SpeechRecognition.stopListening();
+
+    setIsWaitingForNext(true); // ✅ START LOADING
+
     send({
       type: "answer.final",
       session_id: sessionId!,
       request_id: `final-${nowIso()}`,
       payload: { transcript_text: text.trim() },
     });
+
     resetTranscript();
     setTypedAnswer("");
   };
+
   const strengths = asStringArray(evaluation?.strengths);
   const weaknesses = asStringArray(evaluation?.weaknesses);
+
+  const handleFinishSession = useCallback(async () => {
+    if (!sessionId) return;
+    if (!accessToken) {
+      message.error("Please sign in to finish the interview.");
+      navigate("/signin", { replace: true });
+      return;
+    }
+
+    setFinishing(true);
+    try {
+      SpeechRecognition.stopListening();
+      stopSpeaking();
+      const finalReport = await finishInterview({ sessionId, accessToken });
+      setSessionMeta((current) =>
+        current ? { ...current, status: "completed" } : current,
+      );
+      setReport(finalReport);
+      message.success("Interview finished.");
+    } catch (err: unknown) {
+      message.error(getErrorText(err) || "Failed to finish interview.");
+    } finally {
+      setFinishing(false);
+    }
+  }, [accessToken, navigate, sessionId, stopSpeaking]);
 
   if (loadingMeta)
     return (
@@ -264,69 +410,73 @@ function InterviewRoom() {
     );
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 px-4 py-8 transition-colors duration-500">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 px-4 py-8 transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
-        {/* Header Section */}
+        {/* HEADER */}
         <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <Title
               level={2}
-              className="m-0! font-black! tracking-tight! dark:text-white!"
+              className="m-0 font-black tracking-tight dark:text-white"
             >
               Interview Room
             </Title>
-            <div className="flex flex-wrap gap-2 mt-3">
+
+            {/* FIXED TAGS */}
+            <div className="flex flex-wrap items-center gap-2 mt-3">
               <Tag
-                className="border-none! rounded-full! p-2! font-bold uppercase text-[10px]  shadow-sm"
+                className={tagBaseClass}
                 color={isConnected ? "green" : "red"}
               >
-                {isConnected ? "WS Connected" : "Disconnected"}
+                {isConnected ? "WS Connected" : "WS Disconnected"}
               </Tag>
-              <Tag color="blue" className="rounded-full! border-none shadow-sm">
-                {sessionMeta?.llm_provider}
+
+              <Tag className={tagBaseClass} color="blue">
+                {sessionMeta?.llm_provider || "Provider"}
               </Tag>
-              <Tag
-                color="purple"
-                className="rounded-full! border-none shadow-sm text-center"
-              >
-                Q {(question?.index ?? 0) + 1} / {sessionMeta?.max_questions}
+
+              <Tag className={tagBaseClass} color="gold">
+                {sessionMeta?.job_role || "Interview"}
+              </Tag>
+
+              <Tag className={tagBaseClass} color="purple">
+                Q {(question?.index ?? 0) + 1} /{" "}
+                {sessionMeta?.max_questions || "-"}
               </Tag>
             </div>
           </div>
 
           <Space>
             <Button
-              className="rounded-xl! border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+              className="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
               onClick={() => setAutoSpeak(!autoSpeak)}
             >
               Voice: {autoSpeak ? "Auto" : "Manual"}
             </Button>
+
             <Button
               danger
               type="primary"
-              className="rounded-xl! bg-red-500! hover:bg-red-600! border-none! font-bold"
-              onClick={() =>
-                send({
-                  type: "session.finish",
-                  session_id: sessionId!,
-                  payload: {},
-                })
-              }
+              loading={finishing}
+              className="rounded-xl bg-red-500 hover:bg-red-600 border-none font-semibold"
+              onClick={handleFinishSession}
             >
               Finish Session
             </Button>
           </Space>
         </header>
 
-        {/* Main Grid */}
+        {/* GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Left Column: Avatar & Question */}
+          {/* LEFT PANEL */}
           <div className="lg:col-span-5 space-y-6">
-            <Card className="rounded-3xl! shadow-xl border border-slate-200! dark:border-slate-800! overflow-hidden bg-white dark:bg-slate-900">
-              <div className="p-4 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center">
-                <Text className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+            <Card className="rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+              {/* CARD HEADER */}
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                <Text className="text-xs font-bold uppercase tracking-widest text-slate-400">
                   AI Interviewer
                 </Text>
+
                 <Space>
                   <Button
                     size="small"
@@ -343,51 +493,68 @@ function InterviewRoom() {
                   />
                 </Space>
               </div>
-              <div className="h-[450px] bg-slate-950 relative">
-                <Canvas
-                  camera={{
-                    position: [0, 1.4, 2.2],
-                    fov: 35,
-                  }}
-                >
+
+              {/* AVATAR */}
+              <div className="h-112.5 bg-slate-950">
+                <Canvas camera={{ position: [0, 1.4, 2.2], fov: 35 }}>
                   <ambientLight intensity={0.6} />
-                  <pointLight position={[10, 10, 10]} intensity={1} />
+                  <pointLight position={[10, 10, 10]} />
                   <Environment preset="studio" />
+
                   <group position={[0, -1.2, 0]}>
                     <Avatar
                       activeViseme={activeViseme}
                       isSpeaking={isSpeaking}
                     />
                   </group>
+
                   <OrbitControls enableZoom={false} enablePan={false} />
                 </Canvas>
               </div>
             </Card>
           </div>
 
-          {/* Right Column: User Answer & Feedback */}
+          {/* RIGHT PANEL */}
           <div className="lg:col-span-7 space-y-6">
-            <Card className="rounded-3xl! shadow-lg! border-none! text-white! mb-2!">
-              <div className="p-2!">
-                <Text className="text-indigo-600! uppercase text-xl! font-black block">
-                  Interviewer's Question
+            {/* QUESTION */}
+            <Card className="rounded-3xl shadow-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="p-6">
+                <Text className="text-indigo-600 uppercase text-sm font-bold block mb-2">
+                  Interview Question
                 </Text>
-                <Paragraph className="text-xl font-bold text-slate-900! dark:text-white! leading-relaxed m-0">
-                  {question?.question_text || "Ready for your first question?"}
-                </Paragraph>
+
+                {isWaitingForNext ? (
+                  <div className="flex flex-col items-center justify-center py-8 gap-3">
+                    <Spin size="large" />
+                    <Text className="text-slate-500 dark:text-slate-400">
+                      {isLastQuestion
+                        ? "Evaluating response for final report..."
+                        : "Evaluating your answer for next question..."}
+                    </Text>
+                  </div>
+                ) : (
+                  <Paragraph className="text-lg font-semibold text-slate-900 dark:text-white m-0">
+                    {question?.question_text ||
+                      "Ready for your first question?"}
+                  </Paragraph>
+                )}
               </div>
             </Card>
-            <Card className="rounded-3xl! shadow-xl border border-slate-200! dark:border-slate-800! bg-white dark:bg-slate-900">
-              <div className="">
-                <div className="flex items-center justify-between mb-3!">
+
+            {/* ANSWER */}
+            <Card className="rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="p-6">
+                {/* HEADER */}
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center">
-                      <UserOutlined className="text-indigo-600!" />
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                      <UserOutlined className="text-indigo-600" />
                     </div>
-                    <Text className="font-bold dark:text-slate-200">
+                    <Text className="font-semibold dark:text-slate-200">
                       Your Response
                     </Text>
                   </div>
+
                   <Space>
                     <Button
                       icon={<AudioOutlined />}
@@ -396,92 +563,101 @@ function InterviewRoom() {
                           ? SpeechRecognition.stopListening
                           : startListening
                       }
-                      className={`rounded-full! ${listening ? "bg-red-500! text-white! border-none! animate-pulse" : "dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"}`}
+                      className={`rounded-full px-4 ${
+                        listening
+                          ? "bg-red-500 text-white border-none animate-pulse"
+                          : "dark:bg-slate-800 dark:text-slate-300"
+                      }`}
                     >
-                      {listening ? "Recording..." : "Voice Input"}
+                      {listening ? "Recording..." : "Voice"}
                     </Button>
+
                     <Button
                       type="primary"
                       icon={<SendOutlined />}
+                      disabled={isWaitingForNext}
                       onClick={() => submitAnswerText(typedAnswer)}
-                      className="rounded-full! bg-indigo-600! border-none! px-6 font-bold"
+                      className="rounded-full bg-indigo-600 border-none px-6 font-semibold"
                     >
                       Submit
                     </Button>
                   </Space>
                 </div>
 
-                {/* STT Viewport */}
-                <div className="bg-slate-100 dark:bg-slate-900 rounded-2xl p-6 min-h-[140px] mb-4 border border-slate-200 dark:border-slate-800 font-mono">
-                  <Text
-                    className={`${finalTranscript ? "text-slate-800 dark:text-slate-100" : "text-slate-500 italic"} text-base`}
-                  >
+                {/* STT DISPLAY */}
+                <div className="bg-slate-100 dark:bg-slate-900 rounded-2xl p-4 min-h-30 mb-4 border border-slate-200 dark:border-slate-800 font-mono text-sm">
+                  <Text className="text-slate-800 dark:text-slate-100">
                     {finalTranscript || (listening ? "" : "Microphone idle...")}
                   </Text>
-                  <Text className="text-indigo-400 opacity-60 ml-1 italic">
+                  <Text className="text-indigo-400 ml-1 italic">
                     {interimTranscript}
                   </Text>
                 </div>
 
+                {/* TEXT INPUT */}
                 <Input.TextArea
                   value={typedAnswer}
                   onChange={(e) => {
                     sttDrivesTypedAnswerRef.current = false;
                     setTypedAnswer(e.target.value);
                   }}
-                  placeholder="Click 'Voice Input' to speak or type your answer here..."
-                  className="rounded-2xl! bg-slate-50! dark:bg-slate-800/50! border-none! p-4! text-base! dark:text-slate-200!"
+                  placeholder="Speak or type your answer..."
+                  className="rounded-2xl bg-slate-50 dark:bg-slate-800/50 border-none p-4 text-base dark:text-slate-200"
                   autoSize={{ minRows: 4, maxRows: 8 }}
                 />
               </div>
             </Card>
 
+            {/* EVALUATION */}
             {evaluation && (
-              <Card className="rounded-3xl! shadow-lg border border-slate-200! dark:border-slate-800! bg-white dark:bg-slate-900 animate-in slide-in-from-bottom-4 duration-500">
+              <Card className="rounded-3xl shadow-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <div className="p-6">
-                  <div className="flex justify-between items-center mb-6">
+                  <div className="flex justify-between items-center mb-4">
                     <Title
                       level={4}
-                      className="m-0! dark:text-slate-200! flex items-center gap-2"
+                      className="m-0 flex items-center gap-2 dark:text-white"
                     >
-                      <RobotOutlined className="text-indigo-500" /> AI
-                      Evaluation
+                      <RobotOutlined /> Evaluation
                     </Title>
-                    <Tag
-                      color="indigo"
-                      className="rounded-full! px-4! py-1! border-none! font-bold"
-                    >
-                      SCORE: {evaluation.score}
+
+                    <Tag className={tagBaseClass} color="blue">
+                      Score: {evaluation.score}
                     </Tag>
                   </div>
 
-                  <Paragraph className="text-slate-600 dark:text-slate-400 text-lg italic mb-6">
+                  <Paragraph className="text-slate-600 dark:text-slate-400 italic mb-4">
                     "{evaluation.feedback}"
                   </Paragraph>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-4 bg-green-50 dark:bg-green-500/10 rounded-2xl">
-                      <Text className="text-green-600 uppercase text-[10px] font-black tracking-widest block mb-2">
+                      <Text className="text-green-600 text-xs font-bold uppercase block mb-2">
                         Strengths
                       </Text>
-                      <ul className="list-none p-0 m-0 space-y-1">
+                      <ul className="space-y-1 text-sm">
                         {strengths.map((s, i) => (
                           <li
                             key={i}
-                            className="text-green-800 dark:text-green-400 text-sm flex gap-2"
+                            className="text-green-700 dark:text-green-400"
                           >
-                            <CheckCircleOutlined className="mt-1" /> {s}
+                            • {s}
                           </li>
                         ))}
                       </ul>
                     </div>
+
                     <div className="p-4 bg-red-50 dark:bg-red-500/10 rounded-2xl">
-                      <Text className="text-red-600 uppercase text-[10px] font-black tracking-widest block mb-2">
+                      <Text className="text-red-600 text-xs font-bold uppercase block mb-2">
                         Weaknesses
                       </Text>
-                      <ul className="list-none p-0 m-0 space-y-1 text-sm text-red-800 dark:text-red-400">
+                      <ul className="space-y-1 text-sm">
                         {weaknesses.map((w, i) => (
-                          <li key={i}>• {w}</li>
+                          <li
+                            key={i}
+                            className="text-red-700 dark:text-red-400"
+                          >
+                            • {w}
+                          </li>
                         ))}
                       </ul>
                     </div>
