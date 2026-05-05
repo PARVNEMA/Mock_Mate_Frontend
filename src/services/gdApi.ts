@@ -1,5 +1,8 @@
 import axios from "axios";
 import type {
+  GdEvaluationResponse,
+  GdSessionEndResponse,
+  GdSessionStartResponse,
   LobbyJoinResponse,
   LobbyMeStatus,
   LobbyStatusResponse,
@@ -190,4 +193,67 @@ export const getMyStatus = async (
     );
     return response.data;
   }, accessToken);
+};
+
+export const startGdSession = async (params: {
+  roomId: string;
+  topic: string;
+  accessToken?: string;
+}): Promise<GdSessionStartResponse> => {
+  const baseUrl = requireBackendBaseUrl();
+  return withAuthRetry(async (token) => {
+    const response = await axios.post<GdSessionStartResponse>(
+      `${baseUrl}/api/gd/session/start`,
+      { room_id: params.roomId, topic: params.topic },
+      authHeaders(token),
+    );
+    return response.data;
+  }, params.accessToken);
+};
+
+export const endGdSession = async (params: {
+  sessionId: string;
+  accessToken?: string;
+}): Promise<GdSessionEndResponse> => {
+  const baseUrl = requireBackendBaseUrl();
+  return withAuthRetry(async (token) => {
+    const response = await axios.post<GdSessionEndResponse>(
+      `${baseUrl}/api/gd/session/${params.sessionId}/end`,
+      {},
+      authHeaders(token),
+    );
+    return response.data;
+  }, params.accessToken);
+};
+
+export const getGdEvaluation = async (params: {
+  sessionId: string;
+  accessToken?: string;
+}): Promise<GdEvaluationResponse> => {
+  const baseUrl = requireBackendBaseUrl();
+  return withAuthRetry(async (token) => {
+    const response = await axios.get<GdEvaluationResponse>(
+      `${baseUrl}/api/gd/session/${params.sessionId}/evaluation`,
+      authHeaders(token),
+    );
+    return response.data;
+  }, params.accessToken);
+};
+
+export const downloadGdReportPdf = async (params: {
+  sessionId: string;
+  participantId: string;
+  accessToken?: string;
+}): Promise<Blob> => {
+  const baseUrl = requireBackendBaseUrl();
+  return withAuthRetry(async (token) => {
+    const response = await axios.get(
+      `${baseUrl}/api/gd/session/${params.sessionId}/report/${params.participantId}/pdf`,
+      {
+        ...authHeaders(token),
+        responseType: "blob",
+      },
+    );
+    return response.data as Blob;
+  }, params.accessToken);
 };

@@ -333,6 +333,19 @@ export function useGdWebRtc(params: {
 		setIsAudioEnabled(next);
 	}, [isAudioEnabled]);
 
+	const setAudioEnabled = useCallback((enabled: boolean) => {
+		const stream = localStreamRef.current;
+		if (!stream) {
+			logger.warn("Cannot set audio: no local stream");
+			return;
+		}
+		stream.getAudioTracks().forEach((track) => {
+			track.enabled = enabled;
+		});
+		logger.info("Audio set", { enabled });
+		setIsAudioEnabled(enabled);
+	}, []);
+
 	const toggleVideo = useCallback(() => {
 		const stream = localStreamRef.current;
 		if (!stream) {
@@ -383,6 +396,7 @@ export function useGdWebRtc(params: {
 		handleAnswer,
 		handleIceCandidate,
 		toggleAudio,
+		setAudioEnabled,
 		toggleVideo,
 		stopAll,
 	};

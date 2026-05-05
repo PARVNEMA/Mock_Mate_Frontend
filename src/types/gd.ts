@@ -21,7 +21,10 @@ export type WsMessageType =
   | "room_ended"
   | "warning"
   | "report"
-  | "report_ack";
+  | "report_ack"
+  | "alert"
+  | "mute"
+  | "gd_session_started";
 
 export type LobbyJoinResponse = {
   user_id: string;
@@ -178,9 +181,33 @@ export type ReportAckMessage = {
 
 export type TranscriptMessage = {
   type: "transcript";
+  speaker_id?: string;
+  name?: string;
   from_user?: string;
   text: string;
+  timestamp_ms?: number;
   timestamp?: number;
+};
+
+export type AlertMessage = {
+  type: "alert";
+  alert_type: "profanity" | "off_topic" | "dominant_speaker" | "silence";
+  participant_id?: string;
+  session_id?: string;
+  message: string;
+};
+
+export type MuteMessage = {
+  type: "mute";
+  participant_id: string;
+  duration_s: number;
+};
+
+export type GdSessionStartedMessage = {
+  type: "gd_session_started";
+  session_id: string;
+  room_id?: string;
+  host_id?: string;
 };
 
 export type GdLobbyWsMessage =
@@ -202,10 +229,71 @@ export type GdRoomWsMessage =
   | BlacklistedMessage
   | RoomEndedMessage
   | ReportAckMessage
+  | AlertMessage
+  | MuteMessage
+  | GdSessionStartedMessage
   | ErrorMessage;
 
 export type ReportRequest = {
   reported_user_id: string;
   reason: string;
   category?: "abusive_language" | "misconduct" | "spam" | "other";
+};
+
+export type GdSessionStartResponse = {
+  session_id: string;
+  room_id: string;
+  topic: string;
+  host_id: string;
+  participant_count: number;
+  status: "active";
+};
+
+export type GdSessionEndResponse = {
+  success: boolean;
+  session_id: string;
+  participants_evaluated: number;
+  cached?: boolean;
+  evaluations?: GdParticipantEvaluation[];
+};
+
+export type GdPersonalEval = {
+  communication_quality?: number | null;
+  clarity_structure?: number | null;
+  vocabulary_grammar?: number | null;
+  confidence_fluency?: number | null;
+  strengths?: string[] | null;
+  weaknesses?: string[] | null;
+  suggestions?: string[] | null;
+};
+
+export type GdGroupEval = {
+  dominant_speaker?: string | null;
+  most_passive?: string | null;
+  fairness_score?: number | null;
+  collaboration_score?: number | null;
+  group_observations?: string[] | null;
+  per_participant_context?: Record<string, string> | null;
+};
+
+export type GdStats = {
+  word_count?: number | null;
+  turn_count?: number | null;
+  interruptions?: number | null;
+  times_interrupted?: number | null;
+  filler_count?: number | null;
+};
+
+export type GdParticipantEvaluation = {
+  participant_id: string;
+  participant_name: string;
+  personal_eval?: GdPersonalEval | null;
+  group_eval?: GdGroupEval | null;
+  stats?: GdStats | null;
+  created_at?: string;
+};
+
+export type GdEvaluationResponse = {
+  session_id: string;
+  evaluations: GdParticipantEvaluation[];
 };

@@ -5,9 +5,10 @@ type Props = {
   stream: MediaStream | null;
   label: string;
   isLocal?: boolean;
+  isMuted?: boolean;
 };
 
-export default function ParticipantTile({ stream, label, isLocal }: Props) {
+export default function ParticipantTile({ stream, label, isLocal, isMuted }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
 
@@ -55,6 +56,7 @@ export default function ParticipantTile({ stream, label, isLocal }: Props) {
         )}
         <div className="absolute left-2 top-2 flex gap-2">
           <Tag color={isLocal ? "blue" : "geekblue"}>{label}</Tag>
+          {isMuted ? <Tag color="red">Muted</Tag> : null}
         </div>
       </div>
     </Card>

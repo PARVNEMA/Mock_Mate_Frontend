@@ -13,6 +13,7 @@ import QueueStats from "../components/gd/QueueStats";
 import ConnectionBadge from "../components/gd/ConnectionBadge";
 import { getMyStatus } from "../services/gdApi";
 import createLogger from "../utils/logger";
+import { saveGdRoomHost } from "../utils/gdSession";
 import {
   RocketOutlined,
   LogoutOutlined,
@@ -49,6 +50,9 @@ export default function GdLobby() {
         }
       } else if (msg.type === "room_created") {
         logger.info("Room created from lobby", { roomId: msg.room_id });
+        if (msg.users?.[0]) {
+          saveGdRoomHost(msg.room_id, msg.users[0]);
+        }
         message.success("Match found! Redirecting...");
         navigate(`/gd/room/${msg.room_id}`);
       } else if (msg.type === "blacklisted") {

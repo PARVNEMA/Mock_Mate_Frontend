@@ -24,7 +24,7 @@ import { useNavigate } from "react-router-dom";
 import { startInterview } from "../services/interviewApi";
 import type { InterviewType, LLMMode, LLMProvider } from "../types/interview";
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 type SetupFormValues = {
   job_role: string;
