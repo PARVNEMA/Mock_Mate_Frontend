@@ -14,6 +14,8 @@ import ReportModal from "../components/gd/ReportModal";
 import TranscriptPanel from "../components/gd/TranscriptPanel";
 import {
   endGdSession,
+  endRoom,
+  getRoomInfo,
   leaveRoom as leaveRoomRest,
   reportPeer as reportPeerRest,
   startGdSession,
@@ -27,6 +29,7 @@ import {
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
+const gdConsole = (...args: unknown[]) => console.log("[GD ROOM]", ...args);
 
 export default function GdRoom() {
   const navigate = useNavigate();
@@ -61,6 +64,7 @@ export default function GdRoom() {
   );
   const hostUserId = useMemo(() => (roomId ? getGdRoomHost(roomId) : ""), [roomId]);
   const isHost = Boolean(userId && hostUserId && userId === hostUserId);
+  const roomInfoFetchedRef = useRef(false);
 
   const appendTranscript = useCallback(
     (item: { id: string; userId: string; speakerName?: string; text: string; timestampMs: number }) => {
@@ -127,60 +131,99 @@ export default function GdRoom() {
     userId: userId || "",
     enabled: Boolean(roomId && userId),
     onMessage: (msg: GdRoomWsMessage) => {
-      if (msg.type === "room_state") {
+      const rawType = String((msg as any)?.type || "");
+      const rawSessionId = String((msg as any)?.session_id || (msg as any)?.gd_session_id || "").trim();
+      if (rawSessionId && rawSessionId !== sessionId) {
+        gdConsole("Session ID discovered from incoming event payload", { rawType, rawSessionId });
+        setSessionId(rawSessionId);
+        if (roomId) saveGdRoomSessionId(roomId, rawSessionId);
+      }
+      gdConsole("WS message received", { type: rawType, msg });
+      if (rawType === "room_state") {
         setTopicFromRoomState(msg);
-        setPeerIds(normalizePeerIds(msg.peers.map((p) => p.user_id)));
-        void handleRoomState(msg.peers, msg.reconnected);
-      } else if (msg.type === "peer_joined") {
-        if (msg.peer_id !== userId) {
-          setPeerIds((prev) => (prev.includes(msg.peer_id) ? prev : [...prev, msg.peer_id]));
-          void handlePeerJoined(msg.peer_id);
+        const roomStateRaw = msg as Record<string, any>;
+        const roomStateSessionId = String(roomStateRaw.session_id || roomStateRaw.gd_session_id || "").trim();
+        if (roomStateSessionId && roomStateSessionId !== sessionId) {
+          gdConsole("Session ID found in room_state", { roomStateSessionId });
+          setSessionId(roomStateSessionId);
+          if (roomId) saveGdRoomSessionId(roomId, roomStateSessionId);
         }
-      } else if (msg.type === "peer_left") {
-        setPeerIds((prev) => prev.filter((id) => id !== msg.peer_id));
-        setMutedPeerIds((prev) => prev.filter((id) => id !== msg.peer_id));
-        handlePeerLeft(msg.peer_id);
-      } else if (msg.type === "offer" && msg.from_user) {
-        void handleOffer(msg.from_user, msg.sdp);
-      } else if (msg.type === "answer" && msg.from_user) {
-        void handleAnswer(msg.from_user, msg.sdp);
-      } else if (msg.type === "ice_candidate" && msg.from_user) {
-        void handleIceCandidate(msg.from_user, msg.candidate);
-      } else if (msg.type === "gd_session_started" && msg.session_id) {
-        setSessionId(msg.session_id);
-        if (roomId) saveGdRoomSessionId(roomId, msg.session_id);
-      } else if (msg.type === "transcript" && msg.text?.trim()) {
-        const speakerId = msg.speaker_id || msg.from_user || "peer";
+        setPeerIds(normalizePeerIds((msg as any).peers.map((p: any) => p.user_id)));
+        void handleRoomState((msg as any).peers, (msg as any).reconnected);
+      } else if (rawType === "warning") {
+        gdConsole("Warning message", (msg as any).message);
+        message.warning((msg as any).message);
+      } else if (rawType === "error") {
+        gdConsole("Error message from server", (msg as any).message);
+        message.error((msg as any).message || "A room error occurred.");
+      } else if (rawType === "topic_generated" || rawType === "room_ready") {
+        const raw = msg as Record<string, any>;
+        const nextTopic = String(raw.topic || raw.topic_title || "").trim();
+        const nextContext = String(raw.context || raw.topic_context || "").trim();
+        const nextKeyPoints = Array.isArray(raw.key_points) ? raw.key_points : null;
+        gdConsole("Topic/room-ready event parsed", { nextTopic, nextContext, nextKeyPoints });
+        if (nextTopic) setTopic(nextTopic);
+        if (nextContext) setContext(nextContext);
+        if (nextKeyPoints) setKeyPoints(nextKeyPoints);
+      } else if (rawType === "peer_joined") {
+        if ((msg as any).peer_id !== userId) {
+          setPeerIds((prev) => (prev.includes((msg as any).peer_id) ? prev : [...prev, (msg as any).peer_id]));
+          void handlePeerJoined((msg as any).peer_id);
+        }
+      } else if (rawType === "peer_left") {
+        setPeerIds((prev) => prev.filter((id) => id !== (msg as any).peer_id));
+        setMutedPeerIds((prev) => prev.filter((id) => id !== (msg as any).peer_id));
+        handlePeerLeft((msg as any).peer_id);
+      } else if (rawType === "offer" && (msg as any).from_user) {
+        void handleOffer((msg as any).from_user, (msg as any).sdp);
+      } else if (rawType === "answer" && (msg as any).from_user) {
+        void handleAnswer((msg as any).from_user, (msg as any).sdp);
+      } else if (rawType === "ice_candidate" && (msg as any).from_user) {
+        void handleIceCandidate((msg as any).from_user, (msg as any).candidate);
+      } else if (
+        (rawType === "gd_session_started" || rawType === "session_started") &&
+        (msg as any).session_id
+      ) {
+        gdConsole("GD session started event", { sessionId: (msg as any).session_id, fromHost: (msg as any).host_id });
+        setSessionId((msg as any).session_id);
+        if (roomId) saveGdRoomSessionId(roomId, (msg as any).session_id);
+      } else if (rawType === "transcript" && (msg as any).text?.trim()) {
+        const speakerId = (msg as any).speaker_id || (msg as any).from_user || "peer";
         appendTranscript({
-          id: `${speakerId}-${msg.timestamp_ms || Date.now()}`,
+          id: `${speakerId}-${(msg as any).timestamp_ms || Date.now()}`,
           userId: speakerId,
-          speakerName: msg.name || speakerId,
-          text: msg.text,
-          timestampMs: msg.timestamp_ms || Date.now(),
+          speakerName: (msg as any).name || speakerId,
+          text: (msg as any).text,
+          timestampMs: (msg as any).timestamp_ms || Date.now(),
         });
-      } else if (msg.type === "alert") {
-        const who = msg.participant_id ? ` (${msg.participant_id.slice(0, 6)})` : "";
-        if (msg.alert_type === "off_topic") {
-          message.warning(`Off-topic warning: ${msg.message}`);
+      } else if (rawType === "alert") {
+        const who = (msg as any).participant_id ? ` (${(msg as any).participant_id.slice(0, 6)})` : "";
+        if ((msg as any).alert_type === "off_topic") {
+          message.warning(`Off-topic warning: ${(msg as any).message}`);
         } else {
-          message.warning(`${msg.alert_type}${who}: ${msg.message}`);
+          message.warning(`${(msg as any).alert_type}${who}: ${(msg as any).message}`);
         }
-      } else if (msg.type === "mute") {
-        const targetId = msg.participant_id;
+      } else if (rawType === "mute") {
+        const targetId = (msg as any).participant_id;
         setMutedPeerIds((prev) => (prev.includes(targetId) ? prev : [...prev, targetId]));
         window.setTimeout(() => {
           setMutedPeerIds((prev) => prev.filter((id) => id !== targetId));
-        }, msg.duration_s * 1000);
+        }, (msg as any).duration_s * 1000);
         if (targetId === userId) {
-          const until = Date.now() + msg.duration_s * 1000;
+          const until = Date.now() + (msg as any).duration_s * 1000;
           setMutedUntil(until);
           setAudioEnabled(false);
-          message.error(`You are muted for ${msg.duration_s}s due to a policy violation.`);
+          message.error(`You are muted for ${(msg as any).duration_s}s due to a policy violation.`);
         }
-      } else if (msg.type === "room_ended" || msg.type === "blacklisted") {
+      } else if (rawType === "room_ended" || rawType === "blacklisted") {
         const infoMessage = "message" in msg ? msg.message : msg.reason || "Session ended.";
+        gdConsole("Room terminated event", { type: rawType, infoMessage });
         message.info(infoMessage);
-        navigate("/gd");
+        if (sessionId) {
+          navigate(`/gd/report/${sessionId}`);
+        } else {
+          navigate("/gd");
+        }
       }
     },
   });
@@ -188,6 +231,58 @@ export default function GdRoom() {
   useEffect(() => {
     wsSendRef.current = send;
   }, [send]);
+  
+  useEffect(() => {
+    gdConsole("Room state snapshot", {
+      roomId,
+      userId,
+      hostUserId,
+      isHost,
+      hasTopic: Boolean(topic),
+      sessionId,
+      isConnected,
+    });
+  }, [roomId, userId, hostUserId, isHost, topic, sessionId, isConnected]);
+
+  useEffect(() => {
+    if (!roomId || !accessToken || roomInfoFetchedRef.current) return;
+    roomInfoFetchedRef.current = true;
+    void (async () => {
+      try {
+        gdConsole("Fetching room info fallback", { roomId });
+        const info = await getRoomInfo(accessToken, roomId);
+        gdConsole("Room info fetched", info);
+        if (!topic && info.topic) setTopic(info.topic);
+        if (!context && info.context) setContext(info.context);
+        if ((!keyPoints || keyPoints.length === 0) && Array.isArray(info.key_points)) {
+          setKeyPoints(info.key_points);
+        }
+      } catch (err) {
+        console.error("[GD ROOM] Failed to fetch room info fallback", err);
+      }
+    })();
+  }, [roomId, accessToken, topic, context, keyPoints]);
+
+  useEffect(() => {
+    if (!roomId || !accessToken || sessionId) return;
+    const intervalId = window.setInterval(() => {
+      void (async () => {
+        try {
+          const info = await getRoomInfo(accessToken, roomId);
+          const discoveredSessionId = String(
+            (info as any)?.gd_session_id || (info as any)?.session_id || "",
+          ).trim();
+          if (!discoveredSessionId) return;
+          gdConsole("Session ID discovered from room info polling", { discoveredSessionId });
+          setSessionId(discoveredSessionId);
+          saveGdRoomSessionId(roomId, discoveredSessionId);
+        } catch (err) {
+          console.error("[GD ROOM] Session polling failed", err);
+        }
+      })();
+    }, 2000);
+    return () => window.clearInterval(intervalId);
+  }, [roomId, accessToken, sessionId]);
 
   const handleTranscript = useCallback(
     (text: string) => {
@@ -234,7 +329,15 @@ export default function GdRoom() {
   });
 
   const startSession = async () => {
-    if (!roomId || !topic || !isHost) return;
+    gdConsole("Start session requested", { roomId, topic, isHost, userId, hostUserId, isConnected });
+    if (!roomId || !topic || !isHost) {
+      gdConsole("Start session blocked by preconditions", {
+        hasRoomId: Boolean(roomId),
+        hasTopic: Boolean(topic),
+        isHost,
+      });
+      return;
+    }
     if (!accessToken) {
       message.error("Please sign in first.");
       navigate("/signin");
@@ -243,16 +346,19 @@ export default function GdRoom() {
     setSessionStarting(true);
     try {
       const started = await startGdSession({ roomId, topic, accessToken });
+      gdConsole("startGdSession API success", started);
       setSessionId(started.session_id);
       saveGdRoomSessionId(roomId, started.session_id);
-      send({
+      const sent = send({
         type: "gd_session_started",
         session_id: started.session_id,
         room_id: roomId,
         host_id: userId || "",
       });
+      gdConsole("Broadcast gd_session_started", { sent });
       message.success("GD session started.");
     } catch (err: any) {
+      console.error("[GD ROOM] startGdSession API failed", err);
       message.error(err?.response?.data?.detail || "Could not start session.");
     } finally {
       setSessionStarting(false);
@@ -260,12 +366,16 @@ export default function GdRoom() {
   };
 
   const endSession = async () => {
-    if (!sessionId || !accessToken) return;
+    gdConsole("End session requested", { sessionId, roomId, hasAccessToken: Boolean(accessToken) });
+    if (!sessionId || !roomId || !accessToken) return;
     setSessionEnding(true);
     try {
       await endGdSession({ sessionId, accessToken });
-      navigate(`/gd/report/${sessionId}`);
+      gdConsole("endGdSession API success", { sessionId });
+      await endRoom(accessToken, roomId);
+      gdConsole("endRoom API success", { roomId });
     } catch (err: any) {
+      console.error("[GD ROOM] endGdSession API failed", err);
       message.error(err?.response?.data?.detail || "Could not end session.");
     } finally {
       setSessionEnding(false);
@@ -273,6 +383,7 @@ export default function GdRoom() {
   };
 
   const handleLeave = async () => {
+    gdConsole("Leave room requested", { roomId, userId });
     send({ type: "leave_room" });
     close();
     stopAll();
