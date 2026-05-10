@@ -57,6 +57,7 @@ export default function GdRoom() {
   const [mutedPeerIds, setMutedPeerIds] = useState<string[]>([]);
   const recentTranscriptMapRef = useRef<Map<string, number>>(new Map());
   const wsSendRef = useRef<(payload: unknown) => boolean>(() => false);
+  const sessionIdRef = useRef(sessionId);
 
   const accessToken = useMemo(
     () => String(localStorage.getItem("accessToken") || ""),
@@ -216,7 +217,8 @@ export default function GdRoom() {
           message.error(`You are muted for ${(msg as any).duration_s}s due to a policy violation.`);
         }
       } else if (rawType === "room_ended" || rawType === "blacklisted") {
-        const infoMessage = "message" in msg ? msg.message : msg.reason || "Session ended.";
+        const raw = msg as Record<string, any>;
+        const infoMessage = String(raw.message || raw.reason || "Session ended.");
         gdConsole("Room terminated event", { type: rawType, infoMessage });
         message.info(infoMessage);
         if (sessionId) {
@@ -231,6 +233,10 @@ export default function GdRoom() {
   useEffect(() => {
     wsSendRef.current = send;
   }, [send]);
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
   
   useEffect(() => {
     gdConsole("Room state snapshot", {
@@ -286,18 +292,33 @@ export default function GdRoom() {
 
   const handleTranscript = useCallback(
     (text: string) => {
-      if (!sessionId) return;
       const cleanText = text.trim();
       if (!cleanText) return;
-      send({
+
+      let resolvedSessionId = sessionIdRef.current;
+      if (!resolvedSessionId && roomId) {
+        resolvedSessionId = getGdRoomSessionId(roomId);
+      }
+      if (!resolvedSessionId) return;
+
+      const sent = send({
         type: "transcript",
-        session_id: sessionId,
+        session_id: resolvedSessionId,
         text: cleanText,
         word_count: cleanText.split(/\s+/).filter(Boolean).length,
         timestamp_ms: Date.now(),
       });
+      if (!sent || !userId) return;
+
+      appendTranscript({
+        id: `${userId}-${Date.now()}`,
+        userId,
+        speakerName: "You",
+        text: cleanText,
+        timestampMs: Date.now(),
+      });
     },
-    [send, sessionId],
+    [appendTranscript, roomId, send, userId],
   );
 
   useEffect(() => {
