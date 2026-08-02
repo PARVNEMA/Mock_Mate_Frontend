@@ -16,7 +16,6 @@ import {
   reportPeer as reportPeerRest,
   leaveRoom as leaveRoomRest,
 } from "../services/gdApi";
-import createLogger from "../utils/logger";
 import {
   InfoCircleOutlined,
   UsergroupAddOutlined,
@@ -25,7 +24,6 @@ import {
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
-const logger = createLogger("GdRoom");
 
 export default function GdRoom() {
   const navigate = useNavigate();
@@ -120,8 +118,11 @@ export default function GdRoom() {
           text: msg.text!,
           timestamp: msg.timestamp || nowMs / 1000,
         });
-      } else if (msg.type === "room_ended" || msg.type === "blacklisted") {
-        message.info(msg.message || "Session ended.");
+      } else if (msg.type === "room_ended") {
+        message.info("Session ended.");
+        navigate("/gd");
+      } else if (msg.type === "blacklisted") {
+        message.info(msg.message || "You were removed from the room.");
         navigate("/gd");
       }
     },

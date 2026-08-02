@@ -24,7 +24,9 @@ const links: NavLink[] = [
   { name: "Home", href: "/" },
   { name: "Quiz", href: "/quizselector" },
   { name: "Interview", href: "/interview" },
+  { name: "Resume Analysis", href: "/resume-analysis" },
   { name: "GD", href: "/gd" },
+  { name: "Roadmap", href: "/roadmap" },
   { name: "About", href: "/about" },
 ];
 

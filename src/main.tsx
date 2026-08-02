@@ -17,6 +17,8 @@ import InterviewRoom from "./pages/InterviewRoom.tsx";
 import InterviewReport from "./pages/InterviewReport.tsx";
 import GdLobby from "./pages/GdLobby.tsx";
 import GdRoom from "./pages/GdRoom.tsx";
+import Roadmap from "./pages/Roadmap.tsx";
+import ResumeAnalysisPage from "./pages/ResumeAnalysis.tsx";
 import axios from "axios";
 
 const backendUrl = String(import.meta.env.VITE_BACKEND_URL || "").trim();
@@ -98,6 +100,14 @@ const router = createBrowserRouter([
       {
         path: "/gd/room/:roomId",
         element: <GdRoom />,
+      },
+      {
+        path: "/roadmap",
+        element: <Roadmap />,
+      },
+      {
+        path: "/resume-analysis",
+        element: <ResumeAnalysisPage />,
       },
       {
         path: "*",

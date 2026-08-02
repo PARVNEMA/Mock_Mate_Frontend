@@ -36,6 +36,20 @@ const features: Feature[] = [
     action: "Join Lobby",
     href: "/gd",
   },
+  {
+    label: "Career Roadmap",
+    description:
+      "Generate a personalised, AI-powered step-by-step learning roadmap for any target role — instantly.",
+    action: "Build Roadmap",
+    href: "/roadmap",
+  },
+  {
+    label: "Resume Analysis",
+    description:
+      "Upload a PDF resume and surface AI-powered skills, experience highlights, and candidate summary details.",
+    action: "Analyze Resume",
+    href: "/resume-analysis",
+  },
 ];
 
 const Home: React.FC = () => {
@@ -71,7 +85,7 @@ const Home: React.FC = () => {
 
       {/* Feature Cards Grid */}
       <div className="max-w-7xl mx-auto px-6 lg:px-8 pb-24">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
           {features.map((feature) => (
             <Card
               key={feature.label}
