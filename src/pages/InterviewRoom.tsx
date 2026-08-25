@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment, OrbitControls } from "@react-three/drei";
 import {
@@ -82,10 +82,7 @@ function InterviewRoom() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const location = useLocation();
 
-  const accessToken = useMemo(
-    () => String(localStorage.getItem("accessToken") || ""),
-    [],
-  );
+  const getAccessToken = () => String(localStorage.getItem("accessToken") || "").trim();
 
   const [sessionMeta, setSessionMeta] = useState<InterviewSessionOut | null>(
     null,
@@ -251,7 +248,7 @@ function InterviewRoom() {
   const { isConnected, send } = useInterviewSocket({
     wsUrl,
     sessionId: sessionId!,
-    accessToken,
+    accessToken: getAccessToken(),
     onMessage: onWsMessage,
   });
 
@@ -288,7 +285,8 @@ function InterviewRoom() {
       navigate("/interview", { replace: true });
       return;
     }
-    if (!accessToken) {
+    const token = getAccessToken();
+    if (!token) {
       message.error("Please sign in to continue the interview.");
       navigate("/signin", { replace: true });
       return;
@@ -298,7 +296,7 @@ function InterviewRoom() {
     (async () => {
       setLoadingMeta(true);
       try {
-        const session = await getInterviewSession({ sessionId, accessToken });
+        const session = await getInterviewSession({ sessionId, accessToken: token });
         if (cancelled) return;
 
         setSessionMeta(session);
@@ -324,7 +322,7 @@ function InterviewRoom() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, navigate, navigateToReport, report, sessionId]);
+  }, [navigate, navigateToReport, report, sessionId]);
 
   useEffect(() => {
     if (!report) return;
@@ -379,7 +377,8 @@ function InterviewRoom() {
 
   const handleFinishSession = useCallback(async () => {
     if (!sessionId) return;
-    if (!accessToken) {
+    const token = getAccessToken();
+    if (!token) {
       message.error("Please sign in to finish the interview.");
       navigate("/signin", { replace: true });
       return;
@@ -389,7 +388,7 @@ function InterviewRoom() {
     try {
       SpeechRecognition.stopListening();
       stopSpeaking();
-      const finalReport = await finishInterview({ sessionId, accessToken });
+      const finalReport = await finishInterview({ sessionId, accessToken: token });
       setSessionMeta((current) =>
         current ? { ...current, status: "completed" } : current,
       );
@@ -400,7 +399,7 @@ function InterviewRoom() {
     } finally {
       setFinishing(false);
     }
-  }, [accessToken, navigate, sessionId, stopSpeaking]);
+  }, [navigate, sessionId, stopSpeaking]);
 
   if (loadingMeta)
     return (

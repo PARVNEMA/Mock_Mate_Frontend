@@ -27,6 +27,7 @@ const links: NavLink[] = [
   { name: "Resume Analysis", href: "/resume-analysis" },
   { name: "GD", href: "/gd" },
   { name: "Roadmap", href: "/roadmap" },
+  { name: "Blogs & Notes", href: "/blog" },
   { name: "About", href: "/about" },
 ];
 

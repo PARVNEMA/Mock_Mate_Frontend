@@ -17,14 +17,20 @@ export const generateRoadmap = async (
   targetRole: string = "Software Engineer",
 ): Promise<RoadmapResponse> => {
   const baseUrl = requireBackendBaseUrl();
+  const rawToken = localStorage.getItem("accessToken");
+  const token = String(rawToken || "").trim();
+  const headers: Record<string, string> = {};
+
+  if (token && token !== "undefined" && token !== "null") {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await axios.post<RoadmapResponse>(
     `${baseUrl}/roadmap/generate`,
     null,
     {
       params: { target_role: targetRole },
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-      },
+      headers,
     },
   );
   return response.data;

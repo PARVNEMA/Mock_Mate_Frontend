@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   Card,
@@ -49,11 +49,6 @@ function InterviewReportPage() {
     report?: InterviewReport;
   } | null;
 
-  const accessToken = useMemo(
-    () => String(localStorage.getItem("accessToken") || ""),
-    [],
-  );
-
   const [loading, setLoading] = useState(!navState?.report);
   const [report, setReport] = useState<InterviewReport | null>(
     navState?.report ?? null,
@@ -65,7 +60,8 @@ function InterviewReportPage() {
       setLoading(false);
       return;
     }
-    if (!accessToken) {
+    const token = String(localStorage.getItem("accessToken") || "").trim();
+    if (!token) {
       message.error("Please sign in to view your report.");
       navigate("/signin");
       return;
@@ -75,7 +71,7 @@ function InterviewReportPage() {
     (async () => {
       setLoading(true);
       try {
-        const r = await getInterviewReport({ sessionId, accessToken });
+        const r = await getInterviewReport({ sessionId, accessToken: token });
         if (!cancelled) setReport(r);
       } catch (err: unknown) {
         message.error(getErrorText(err) || "Failed to load report.");
@@ -87,7 +83,7 @@ function InterviewReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, navigate, navState?.report, sessionId]);
+  }, [navigate, navState?.report, sessionId]);
 
   if (loading) {
     return (

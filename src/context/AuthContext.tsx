@@ -5,9 +5,9 @@ interface AuthContextType {
   userId: string | null;
   login: (
     email: string,
-    accessToken: string,
-    refreshToken: string,
-    userId: string,
+    accessToken?: string,
+    refreshToken?: string,
+    userId?: string,
   ) => void;
   logout: () => void;
 }
@@ -30,10 +30,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   ) => {
     setUserEmail(email);
     setUserId(incomingUserId || null);
-    localStorage.setItem("userEmail", email);
-    localStorage.setItem("userId", incomingUserId || "");
-    localStorage.setItem("accessToken", accessToken || "");
-    localStorage.setItem("refreshToken", refreshToken || "");
+
+    if (email) {
+      localStorage.setItem("userEmail", email);
+    } else {
+      localStorage.removeItem("userEmail");
+    }
+
+    if (incomingUserId) {
+      localStorage.setItem("userId", incomingUserId);
+    } else {
+      localStorage.removeItem("userId");
+    }
+
+    const cleanAccess = String(accessToken || "").trim();
+    if (cleanAccess && cleanAccess !== "undefined" && cleanAccess !== "null") {
+      localStorage.setItem("accessToken", cleanAccess);
+    } else {
+      localStorage.removeItem("accessToken");
+    }
+
+    const cleanRefresh = String(refreshToken || "").trim();
+    if (cleanRefresh && cleanRefresh !== "undefined" && cleanRefresh !== "null") {
+      localStorage.setItem("refreshToken", cleanRefresh);
+    } else {
+      localStorage.removeItem("refreshToken");
+    }
   };
 
   const logout = () => {

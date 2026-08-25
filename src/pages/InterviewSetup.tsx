@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Button,
   Card,
@@ -98,12 +98,8 @@ function InterviewSetup() {
     return false;
   }, [resumeFileList, watchJobRole, watchLlmMode, watchApiKey]);
 
-  const accessToken = useMemo(
-    () => String(localStorage.getItem("accessToken") || ""),
-    [],
-  );
-
   const onSubmit = async (values: SetupFormValues) => {
+    const accessToken = String(localStorage.getItem("accessToken") || "").trim();
     if (!accessToken) {
       message.error("Please sign in before starting.");
       navigate("/signin");

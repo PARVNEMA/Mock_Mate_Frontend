@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import {
   Button,
   Form,
@@ -78,18 +78,30 @@ const SignUp: React.FC = () => {
         payload,
       );
 
-      login(
-        data.user.email,
-        data.session.access_token,
-        data.session.refresh_token,
-        data.user.id,
-      );
+      const resData = data.data || data;
+      const userObj = resData.user || {};
+      const sessionObj = resData.session || {};
+      const token = sessionObj.access_token || resData.access_token || resData.token;
+      const refresh = sessionObj.refresh_token || resData.refresh_token;
 
-      // Auto-trigger profile fetch to ensure DB sync
-      await axios.get(
-        `${import.meta.env.VITE_BACKEND_URL}/profiles/me`,
-        getAuthHeaders(),
-      );
+      if (token) {
+        login(
+          userObj.email || values.email || "",
+          token,
+          refresh,
+          userObj.id || "",
+        );
+
+        // Auto-trigger profile fetch if token is available
+        try {
+          await axios.get(
+            `${import.meta.env.VITE_BACKEND_URL}/profiles/me`,
+            getAuthHeaders(),
+          );
+        } catch {
+          // Ignore profile sync warning if profile is created on demand
+        }
+      }
 
       message.success("Welcome aboard!");
       navigate("/");

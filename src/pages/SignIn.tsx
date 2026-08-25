@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { Button, Form, Input, Typography, Divider, message } from "antd";
 import { LockOutlined, MailOutlined, LoginOutlined } from "@ant-design/icons";
 import axios from "axios";
@@ -26,11 +26,17 @@ const SignIn: React.FC = () => {
         values,
       );
 
+      const resData = data.data || data;
+      const userObj = resData.user || {};
+      const sessionObj = resData.session || {};
+      const token = sessionObj.access_token || resData.access_token || resData.token;
+      const refresh = sessionObj.refresh_token || resData.refresh_token;
+
       login(
-        data.user.email,
-        data.session.access_token,
-        data.session.refresh_token,
-        data.user.id,
+        userObj.email || values.email || "",
+        token,
+        refresh,
+        userObj.id || "",
       );
 
       message.success("Logged in successfully!");

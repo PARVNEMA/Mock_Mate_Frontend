@@ -19,6 +19,9 @@ import GdLobby from "./pages/GdLobby.tsx";
 import GdRoom from "./pages/GdRoom.tsx";
 import Roadmap from "./pages/Roadmap.tsx";
 import ResumeAnalysisPage from "./pages/ResumeAnalysis.tsx";
+import Blog from "./pages/Blog.tsx";
+import BlogPostDetail from "./pages/BlogPostDetail.tsx";
+import Playlists from "./pages/Playlists.tsx";
 import axios from "axios";
 
 const backendUrl = String(import.meta.env.VITE_BACKEND_URL || "").trim();
@@ -32,6 +35,16 @@ if (backendUrl) {
     // Ignore invalid URL and keep default axios behavior.
   }
 }
+
+// Automatically attach Bearer token to all outgoing Axios requests
+axios.interceptors.request.use((config) => {
+  const rawToken = localStorage.getItem("accessToken");
+  const token = String(rawToken || "").trim();
+  if (token && token !== "undefined" && token !== "null") {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 const router = createBrowserRouter([
   {
@@ -108,6 +121,18 @@ const router = createBrowserRouter([
       {
         path: "/resume-analysis",
         element: <ResumeAnalysisPage />,
+      },
+      {
+        path: "/blog",
+        element: <Blog />,
+      },
+      {
+        path: "/blog/:id",
+        element: <BlogPostDetail />,
+      },
+      {
+        path: "/playlists",
+        element: <Playlists />,
       },
       {
         path: "*",

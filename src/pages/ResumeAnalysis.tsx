@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   Card,
@@ -50,12 +50,8 @@ const ResumeAnalysis = () => {
   const [selectedResume, setSelectedResume] =
     useState<ResumeAnalysisResult | null>(null);
 
-  const accessToken = useMemo(
-    () => String(localStorage.getItem("accessToken") || "").trim(),
-    [],
-  );
-
   const onUpload = async () => {
+    const accessToken = String(localStorage.getItem("accessToken") || "").trim();
     if (!accessToken) {
       message.warning("Please sign in before using resume analysis.");
       return;
